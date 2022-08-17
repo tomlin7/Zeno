@@ -4,7 +4,6 @@ import (
 	"github.com/CorentinB/Zeno/cmd"
 	"github.com/CorentinB/Zeno/config"
 	"github.com/sirupsen/logrus"
-	log "github.com/sirupsen/logrus"
 	"github.com/urfave/cli/v2"
 )
 
@@ -21,7 +20,7 @@ func newGetHQCmd() *cli.Command {
 func cmdGetHQ(c *cli.Context) error {
 	err := initLogging(c)
 	if err != nil {
-		log.Error("Unable to parse arguments")
+		logrus.Error("Unable to parse arguments")
 		return err
 	}
 

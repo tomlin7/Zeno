@@ -14,6 +14,7 @@ type Flags struct {
 	LiveStats           bool
 	Debug               bool
 
+	DisablePDFExtraction  bool
 	DisabledHTMLTags      cli.StringSlice
 	ExcludedHosts         cli.StringSlice
 	DomainsCrawl          bool

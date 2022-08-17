@@ -5,7 +5,6 @@ import (
 	"github.com/CorentinB/Zeno/config"
 	"github.com/CorentinB/Zeno/internal/pkg/frontier"
 	"github.com/sirupsen/logrus"
-	log "github.com/sirupsen/logrus"
 	"github.com/urfave/cli/v2"
 )
 
@@ -22,7 +21,7 @@ func newGetListCmd() *cli.Command {
 func cmdGetList(c *cli.Context) error {
 	err := initLogging(c)
 	if err != nil {
-		log.Error("Unable to parse arguments")
+		logrus.Error("Unable to parse arguments")
 		return err
 	}
 

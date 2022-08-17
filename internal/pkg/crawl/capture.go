@@ -10,6 +10,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/CorentinB/Zeno/internal/pkg/crawl/extractors/pdf"
 	"github.com/CorentinB/Zeno/internal/pkg/utils"
 	"github.com/remeh/sizedwaitgroup"
 	"github.com/tidwall/gjson"
@@ -293,10 +294,26 @@ func (c *Crawl) Capture(item *frontier.Item) {
 		return
 	}
 
-	// If the response isn't a text/*, we do not scrape it.
+	// Apply extractor for specific Content-Type, like PDF or EPUB files.
+	// If no extractor can be applied, if the response isn't a text/*, we do not scrape it.
 	// We also aren't going to scrape if assets and outlinks are turned off.
-	if !strings.Contains(resp.Header.Get("Content-Type"), "text/") || (c.DisableAssetsCapture && !c.DomainsCrawl && (c.MaxHops <= item.Hop)) {
-		// Enforce reading all data from the response for WARC writing
+	if !c.DomainsCrawl && (c.MaxHops <= item.Hop) {
+		io.Copy(io.Discard, resp.Body)
+		return
+	} else if strings.Contains(resp.Header.Get("Content-Type"), "pdf") {
+		URLs, err := pdf.ExtractURLsFromText(resp.Body)
+		if err != nil {
+			logWarning.WithFields(logrus.Fields{
+				"error": err,
+			}).Warning(item.URL.String())
+		}
+
+		for _, URL := range URLs {
+			logrus.Infof("%s", URL)
+		}
+
+		return
+	} else if !strings.Contains(resp.Header.Get("Content-Type"), "text/") {
 		io.Copy(io.Discard, resp.Body)
 		return
 	}

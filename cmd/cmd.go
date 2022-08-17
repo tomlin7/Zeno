@@ -122,7 +122,6 @@ var GlobalFlags = []cli.Flag{
 	},
 	&cli.BoolFlag{
 		Name:        "capture-alternate-pages",
-		Value:       false,
 		Usage:       "If turned on, <link> HTML tags with \"alternate\" values for their \"rel\" attribute will be archived.",
 		Destination: &config.App.Flags.CaptureAlternatePages,
 	},
@@ -130,6 +129,11 @@ var GlobalFlags = []cli.Flag{
 		Name:        "exclude-host",
 		Usage:       "Exclude a specific host from the crawl, note that it will not exclude the domain if it is encountered as an asset for another web page.",
 		Destination: &config.App.Flags.ExcludedHosts,
+	},
+	&cli.BoolFlag{
+		Name:        "disable-pdf-extraction",
+		Usage:       "If specified, PDF won't be parsed for URLs.",
+		Destination: &config.App.Flags.DisablePDFExtraction,
 	},
 
 	// Proxy flags
@@ -166,7 +170,6 @@ var GlobalFlags = []cli.Flag{
 	},
 	&cli.BoolFlag{
 		Name:        "warc-on-disk",
-		Value:       false,
 		Usage:       "Do not use RAM to store payloads when recording traffic to WARCs, everything will happen on disk (usually used to reduce memory usage).",
 		Destination: &config.App.Flags.WARCFullOnDisk,
 	},
@@ -185,26 +188,22 @@ var GlobalFlags = []cli.Flag{
 	&cli.BoolFlag{
 		Name:        "disable-local-dedupe",
 		Usage:       "Disable local URL agonistic deduplication.",
-		Value:       false,
 		Destination: &config.App.Flags.DisableLocalDedupe,
 	},
 	&cli.BoolFlag{
 		Name:        "cert-validation",
 		Usage:       "Enables certificate validation on HTTPS requests.",
-		Value:       false,
 		Destination: &config.App.Flags.CertValidation,
 	},
 	&cli.BoolFlag{
 		Name:        "disable-assets-capture",
 		Usage:       "Disable assets capture.",
-		Value:       false,
 		Destination: &config.App.Flags.DisableAssetsCapture,
 	},
 
 	// Crawl HQ flags
 	&cli.BoolFlag{
 		Name:        "hq",
-		Value:       false,
 		Usage:       "Use Crawl HQ to pull URLs to process.",
 		Destination: &config.App.Flags.UseHQ,
 	},
