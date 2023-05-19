@@ -378,7 +378,7 @@ func (c *Crawl) Capture(item *frontier.Item) {
 
 	// Execute site-specific code on the document
 	if strings.Contains(base.Host, "rumble.com") {
-		rumbleVideoURLs, err := rumble.GetVideoURLs(doc, c.Client)
+		rumbleVideoURLs, err := rumble.GetVideoURLs(doc, utils.URLToString(item.URL), c.Client)
 		if err != nil {
 			logWarning.WithFields(logrus.Fields{
 				"error": err,

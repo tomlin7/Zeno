@@ -8,7 +8,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/CorentinB/Zeno/internal/pkg/utils"
 	"github.com/CorentinB/warc"
 	"github.com/PuerkitoBio/goquery"
 )
@@ -144,22 +143,7 @@ type EmbedJS struct {
 	} `json:"a"`
 }
 
-// func IsVideo(URL string) {
-// 	// For an URL to be matched as a video, it must match the following regex:
-// 	// https://rumble.com/v[0-9a-zA-Z]+
-// 	// https://rumble.com/embed/[0-9a-zA-Z]+
-// 	// https://rumble.com/c-[0-9a-zA-Z]+
-// 	// https://rumble.com/user/[0-9a-zA-Z]+
-// 	// https://rumble.com/v[0-9a-zA-Z]+.html
-// 	// https://rumble.com/embed/[0-9a-zA-Z]+.html
-// 	// https://rumble.com/c-[0-9a-zA-Z]+.html
-// 	// https://rumble.com/user/[0-9a-zA-Z]+.html
-// 	// https://rumble.com/v[0-9a-zA-Z]+.html?mref=
-// 	// https://rumble.com/embed/[0-9a-zA-Z]+.html?mref=
-
-// }
-
-func GetVideoURLs(doc *goquery.Document, httpClient *warc.CustomHTTPClient) (videoURLs []url.URL, err error) {
+func GetVideoURLs(doc *goquery.Document, originURL string, httpClient *warc.CustomHTTPClient) (videoURLs []url.URL, err error) {
 	// Look for the oembed URL to find the video ID
 	oembed := findOEmbed(doc)
 	if oembed == "" {
@@ -183,7 +167,7 @@ func GetVideoURLs(doc *goquery.Document, httpClient *warc.CustomHTTPClient) (vid
 	req.Header.Set("Authority", "rumble.com")
 	req.Header.Set("Accept", "*/*")
 	req.Header.Set("Accept-Language", "fr-FR,fr;q=0.9,en-US;q=0.8,en;q=0.7")
-	req.Header.Set("Referer", utils.URLToString(doc.Url))
+	req.Header.Set("Referer", originURL)
 	req.Header.Set("Sec-Ch-Ua", "\"Google Chrome\";v=\"113\", \"Chromium\";v=\"113\", \"Not-A.Brand\";v=\"24\"")
 	req.Header.Set("Sec-Ch-Ua-Mobile", "?0")
 	req.Header.Set("Sec-Ch-Ua-Platform", "\"Linux\"")
