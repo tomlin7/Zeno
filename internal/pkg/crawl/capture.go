@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/CorentinB/Zeno/internal/pkg/crawl/sitespecific/cloudflarestream"
+	"github.com/CorentinB/Zeno/internal/pkg/crawl/sitespecific/rumble"
 	"github.com/CorentinB/Zeno/internal/pkg/crawl/sitespecific/tiktok"
 	"github.com/CorentinB/Zeno/internal/pkg/utils"
 	"github.com/remeh/sizedwaitgroup"
@@ -373,6 +374,20 @@ func (c *Crawl) Capture(item *frontier.Item) {
 			"error": err,
 		}).Warning(utils.URLToString(item.URL))
 		return
+	}
+
+	// Execute site-specific code on the document
+	if strings.Contains(base.Host, "rumble.com") {
+		rumbleVideoURLs, err := rumble.GetVideoURLs(doc, c.Client)
+		if err != nil {
+			logWarning.WithFields(logrus.Fields{
+				"error": err,
+				"url":   utils.URLToString(base),
+			}).Warning("Unable to get rumble video URLs")
+			return
+		}
+
+		assets = append(assets, rumbleVideoURLs...)
 	}
 
 	// If we didn't find any assets, let's stop here
