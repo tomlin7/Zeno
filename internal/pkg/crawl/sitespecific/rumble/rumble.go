@@ -199,15 +199,27 @@ func GetVideoURLs(doc *goquery.Document, originURL string, httpClient *warc.Cust
 
 	rawURLs = append(rawURLs,
 		embedJS.I,
+		embedJS.I+"?u=3&b=0",
 		embedJS.U.Mp4.URL,
+		embedJS.U.Mp4.URL+"?u=3&b=0",
 		embedJS.U.Timeline.URL,
+		embedJS.U.Timeline.URL+"?u=3&b=0",
 		embedJS.Ua.Mp4.Num240.URL,
+		embedJS.Ua.Mp4.Num240.URL+"?u=3&b=0",
 		embedJS.Ua.Mp4.Num360.URL,
+		embedJS.Ua.Mp4.Num360.URL+"?u=3&b=0",
 		embedJS.Ua.Mp4.Num480.URL,
+		embedJS.Ua.Mp4.Num480.URL+"?u=3&b=0",
 		embedJS.Ua.Mp4.Num720.URL,
+		embedJS.Ua.Mp4.Num720.URL+"?u=3&b=0",
 		embedJS.Ua.Mp4.Num1080.URL,
+		embedJS.Ua.Mp4.Num1080.URL+"?u=3&b=0",
 		embedJS.Ua.Timeline.Num180.URL,
+		embedJS.Ua.Timeline.Num180.URL+"?u=3&b=0",
 	)
+
+	// Remove duplicates in rawURLs & improper URLs
+	rawURLs = cleanSlice(rawURLs)
 
 	for _, rawURL := range rawURLs {
 		videoURL, err := url.Parse(rawURL)
@@ -224,4 +236,20 @@ func GetVideoURLs(doc *goquery.Document, originURL string, httpClient *warc.Cust
 func findOEmbed(doc *goquery.Document) string {
 	oembed, _ := doc.Find("link[rel='alternate'][type='application/json+oembed']").Attr("href")
 	return oembed
+}
+
+func cleanSlice(strSlice []string) []string {
+	allKeys := make(map[string]bool)
+	list := []string{}
+	for _, item := range strSlice {
+		if !strings.HasPrefix(item, "http") {
+			continue
+		}
+
+		if _, value := allKeys[item]; !value {
+			allKeys[item] = true
+			list = append(list, item)
+		}
+	}
+	return list
 }
