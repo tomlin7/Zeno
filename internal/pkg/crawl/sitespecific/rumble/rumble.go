@@ -222,12 +222,14 @@ func GetVideoURLs(doc *goquery.Document, originURL string, httpClient *warc.Cust
 	rawURLs = cleanSlice(rawURLs)
 
 	for _, rawURL := range rawURLs {
-		videoURL, err := url.Parse(rawURL)
-		if err != nil {
-			continue
-		}
+		if rawURL != "" {
+			videoURL, err := url.Parse(rawURL)
+			if err != nil {
+				continue
+			}
 
-		videoURLs = append(videoURLs, *videoURL)
+			videoURLs = append(videoURLs, *videoURL)
+		}
 	}
 
 	return
