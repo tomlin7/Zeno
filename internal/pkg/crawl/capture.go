@@ -2,9 +2,12 @@ package crawl
 
 import (
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/url"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -15,11 +18,25 @@ import (
 	"github.com/CorentinB/Zeno/internal/pkg/utils"
 	"github.com/PuerkitoBio/goquery"
 	"github.com/remeh/sizedwaitgroup"
+	"github.com/sirupsen/logrus"
 	"github.com/tidwall/gjson"
 	"github.com/tomnomnom/linkheader"
 
 	"github.com/CorentinB/Zeno/internal/pkg/frontier"
 )
+
+func appendLineToFile(filename, line string) error {
+	// Open the file with append mode, or create it if it doesn't exist
+	f, err := os.OpenFile(filename, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	// Write the line to the file
+	_, err = f.WriteString(line + "\n")
+	return err
+}
 
 func (c *Crawl) executeGET(item *frontier.Item, req *http.Request, isRedirection bool) (resp *http.Response, err error) {
 	var (
@@ -52,6 +69,14 @@ func (c *Crawl) executeGET(item *frontier.Item, req *http.Request, isRedirection
 	// If the request is a redirection, we do not pause the crawl because we want to follow the redirection.
 	if isRedirection {
 		for c.shouldPause(item.Host) {
+			err := appendLineToFile(filepath.Join(c.JobPath, "hang.txt"),
+				fmt.Sprintf(
+					"[%s] time sleep trigerred for host %s because %d is higher or equal to %d, sleeping %f seconds",
+					time.Now().UTC().Format(time.RFC3339), item.Host, c.Frontier.GetActiveHostCount(item.Host), c.MaxConcurrentRequestsPerDomain, time.Duration(time.Millisecond*time.Duration(c.RateLimitDelay)).Seconds()))
+			if err != nil {
+				logrus.Panicln(err)
+			}
+
 			time.Sleep(time.Millisecond * time.Duration(c.RateLimitDelay))
 		}
 
