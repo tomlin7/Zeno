@@ -9,6 +9,7 @@ import (
 	"github.com/CorentinB/Zeno/internal/pkg/frontier"
 	"github.com/CorentinB/Zeno/internal/pkg/utils"
 	"github.com/CorentinB/warc"
+	"github.com/babolivier/go-doh-client"
 	"github.com/paulbellamy/ratecounter"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/remeh/sizedwaitgroup"
@@ -48,6 +49,8 @@ type Crawl struct {
 	Client                         *warc.CustomHTTPClient
 	ClientProxied                  *warc.CustomHTTPClient
 	Logger                         logrus.Logger
+	DNSResolver                    doh.Resolver
+	UseDNSResolver                 bool
 	DisabledHTMLTags               []string
 	ExcludedHosts                  []string
 	ExcludedStrings                []string
@@ -234,7 +237,19 @@ func (c *Crawl) Start() (err error) {
 	c.Client.Timeout = time.Duration(c.HTTPTimeout) * time.Second
 	logrus.Infof("HTTP client timeout set to %d seconds", c.HTTPTimeout)
 
+	// Setup DoH DNS resolver
+	c.UseDNSResolver = true
+	c.DNSResolver = doh.Resolver{
+		Host:       "9.9.9.9",
+		Class:      doh.IN,
+		HTTPClient: &c.Client.Client,
+	}
+
 	if c.Proxy != "" {
+		// TODO: we are unsure of the behavior when using
+		// a proxy, so we disable the DNS resolver for now
+		c.UseDNSResolver = false
+
 		proxyHTTPClientSettings := HTTPClientSettings
 		proxyHTTPClientSettings.Proxy = c.Proxy
 

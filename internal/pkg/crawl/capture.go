@@ -60,6 +60,17 @@ func (c *Crawl) executeGET(item *frontier.Item, req *http.Request, isRedirection
 		defer c.Frontier.DecrHostActive(item.Host)
 	}
 
+	// Execute the DNS request if the resolver is enabled
+	if c.UseDNSResolver {
+		_, _, err := c.DNSResolver.LookupA(req.URL.Host)
+		if err != nil {
+			logWarning.WithFields(c.genLogFields(err, req.URL, map[string]interface{}{
+				"err":        err,
+				"statusCode": resp.StatusCode,
+			})).Warnf("error while executing DNS request")
+		}
+	}
+
 	// Retry on 429 error
 	for retry := 0; retry < c.MaxRetry; retry++ {
 		// Execute GET request
