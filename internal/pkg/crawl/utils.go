@@ -15,7 +15,7 @@ var regexOutlinks *regexp.Regexp
 
 func (c *Crawl) writeFrontierToDisk() {
 	for !c.Finished.Get() {
-		c.Frontier.Save()
+		//c.Frontier.Save()
 		time.Sleep(time.Minute * 1)
 	}
 }
