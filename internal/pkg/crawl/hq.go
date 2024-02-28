@@ -98,6 +98,7 @@ func (c *Crawl) HQProducer() {
 					HQLastSent = time.Now()
 				}
 				mutex.Unlock()
+				time.Sleep(time.Second)
 			}
 		}
 	}()
