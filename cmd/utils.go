@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"cloud.google.com/go/profiler"
 	"github.com/google/uuid"
 	"github.com/internetarchive/Zeno/config"
 	"github.com/internetarchive/Zeno/internal/pkg/crawl"
@@ -16,6 +17,7 @@ import (
 	"github.com/internetarchive/Zeno/internal/pkg/log"
 	"github.com/internetarchive/Zeno/internal/pkg/utils"
 	"github.com/paulbellamy/ratecounter"
+	"google.golang.org/api/option"
 )
 
 // InitCrawlWithCMD takes a config.Flags struct and return a
@@ -44,6 +46,22 @@ func InitCrawlWithCMD(flags config.Flags) *crawl.Crawl {
 	logfileOutputDir := filepath.Dir(flags.LogFileOutputDir)
 	if logfileOutputDir == "." && flags.LogFileOutputDir != "." {
 		logfileOutputDir = filepath.Dir(flags.LogFileOutputDir + "/")
+	}
+
+	// Start Google Cloud Profiler if needed
+
+	if flags.GCPProjectID != "" {
+		cfg := profiler.Config{
+			Service:        "zeno",
+			ServiceVersion: utils.GetVersion().Version,
+			ProjectID:      flags.GCPProjectID,
+			DebugLogging:   true,
+		}
+
+		// Profiler initialization
+		if err := profiler.Start(cfg, option.WithCredentialsFile(flags.GCPServiceAccountKeyFile)); err != nil {
+			fmt.Println(err)
+		}
 	}
 
 	// Craft custom logger

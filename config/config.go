@@ -28,6 +28,8 @@ type Flags struct {
 	CrawlTimeLimit                 int
 	MaxCrawlTimeLimit              int
 	RandomLocalIP                  bool
+	GCPProjectID                   string
+	GCPServiceAccountKeyFile       string
 
 	Proxy       string
 	BypassProxy cli.StringSlice

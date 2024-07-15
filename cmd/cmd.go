@@ -339,6 +339,19 @@ var GlobalFlags = []cli.Flag{
 		Usage:       "Use random local IP for requests. (will be ignored if a proxy is set)",
 		Destination: &config.App.Flags.RandomLocalIP,
 	},
+	// Profiling
+	&cli.StringFlag{
+		Name:        "gcp-project-id",
+		Value:       "",
+		Usage:       "GCP project ID to use for profiling.",
+		Destination: &config.App.Flags.GCPProjectID,
+	},
+	&cli.StringFlag{
+		Name:        "gcp-key-file",
+		Value:       "",
+		Usage:       "GCP key file location to use for profiling.",
+		Destination: &config.App.Flags.GCPServiceAccountKeyFile,
+	},
 }
 
 var Commands []*cli.Command
