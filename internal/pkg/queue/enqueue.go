@@ -35,8 +35,6 @@ func (q *PersistentGroupedQueue) BatchEnqueue(items ...*Item) error {
 	}
 
 	itemsChan := make(chan *msg, len(items))
-	defer close(itemsChan)
-
 	wg := &sync.WaitGroup{}
 	wg.Add(len(items))
 
@@ -48,10 +46,6 @@ func (q *PersistentGroupedQueue) BatchEnqueue(items ...*Item) error {
 
 		go func(i *Item, wg *sync.WaitGroup) {
 			defer wg.Done()
-
-			if q.Handover.TryPut(i) {
-				return
-			}
 
 			b, err := encodeItem(i)
 			if err != nil {
@@ -67,18 +61,7 @@ func (q *PersistentGroupedQueue) BatchEnqueue(items ...*Item) error {
 	}
 
 	wg.Wait()
-
-	if leftover, exists := q.Handover.TryGet(); exists {
-		b, err := encodeItem(leftover)
-		if err != nil {
-			q.logger.Error("failed to encode item", "err", err)
-		} else {
-			itemsChan <- &msg{
-				bytes: b,
-				item:  leftover,
-			}
-		}
-	}
+	close(itemsChan)
 
 	for msg := range itemsChan {
 		// Write item to file

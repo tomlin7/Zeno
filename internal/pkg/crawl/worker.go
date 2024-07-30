@@ -1,7 +1,6 @@
 package crawl
 
 import (
-	"runtime"
 	"sync"
 	"time"
 
@@ -78,17 +77,11 @@ func (w *Worker) Run() {
 				w.state.lastAction = "waiting for queue to be filled"
 			}
 			for (w.pool.Crawl.Paused.Get() || w.pool.Crawl.Queue.Empty.Get()) && w.pool.Crawl.Queue.CanDequeue() {
-				runtime.Gosched()
+				time.Sleep(1 * time.Millisecond)
 			}
 		}
 
-		// Try to get a handover item first
-		var err error
-		item, ok := w.pool.Crawl.Queue.Handover.TryGet()
-		if !ok {
-			// If the handover is empty, we try to get an item from the queue
-			item, err = w.pool.Crawl.Queue.Dequeue()
-		}
+		item, err := w.pool.Crawl.Queue.Dequeue()
 		if err != nil {
 			// Log the error too?
 			w.state.lastError = err
@@ -115,7 +108,7 @@ func (w *Worker) Run() {
 		// If the crawl is paused, we wait until it's resumed
 		for w.pool.Crawl.Paused.Get() {
 			w.state.lastAction = "waiting for crawl to resume"
-			runtime.Gosched()
+			time.Sleep(time.Second)
 		}
 
 		// If the host of the item is in the host exclusion list, we skip it

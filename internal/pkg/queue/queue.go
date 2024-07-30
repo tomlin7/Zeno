@@ -30,8 +30,6 @@ type PersistentGroupedQueue struct {
 	currentHost     *atomic.Uint64
 	mutex           sync.RWMutex
 
-	Handover *HandoverChannel
-
 	closed    *utils.TAtomBool
 	finishing *utils.TAtomBool
 
@@ -77,8 +75,6 @@ func NewPersistentGroupedQueue(queueDirPath string) (*PersistentGroupedQueue, er
 
 		closed:    new(utils.TAtomBool),
 		finishing: new(utils.TAtomBool),
-
-		Handover: NewHandoverChannel(),
 
 		queueDirPath:    queueDirPath,
 		queueFile:       file,
