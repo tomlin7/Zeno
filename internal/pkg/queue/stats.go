@@ -80,6 +80,9 @@ func (q *PersistentGroupedQueue) genStats() {
 	if q.stats.EnqueueCount > 0 {
 		q.stats.AverageTimeBetweenEnqueues = time.Since(q.stats.FirstEnqueueTime) / time.Duration(q.stats.EnqueueCount)
 	}
+
+	// Calculate handover success get count
+	q.stats.HandoverSuccessGetCount = q.handover.count.Load()
 }
 
 func (q *PersistentGroupedQueue) loadStatsFromFile(path string) error {
