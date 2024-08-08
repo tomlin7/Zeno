@@ -8,6 +8,7 @@ import (
 
 	"git.archive.org/wb/gocrawlhq"
 	"github.com/internetarchive/Zeno/internal/capture"
+	"github.com/internetarchive/Zeno/internal/hq"
 	"github.com/internetarchive/Zeno/internal/item"
 	"github.com/internetarchive/Zeno/internal/queue"
 	"github.com/internetarchive/Zeno/internal/reactor"
@@ -103,7 +104,7 @@ func (c *Crawl) Start() (err error) {
 	// If crawl HQ parameters are specified, then we start the background
 	// processes responsible for pulling and pushing seeds from and to HQ
 	if c.UseHQ {
-		c.HQClient, err = gocrawlhq.Init(c.HQKey, c.HQSecret, c.HQProject, c.HQAddress)
+		newHQClient, err := gocrawlhq.Init(c.HQKey, c.HQSecret, c.HQProject, c.HQAddress)
 		if err != nil {
 			c.Log.Fatal("unable to init crawl HQ client", "error", err)
 		}
@@ -111,11 +112,19 @@ func (c *Crawl) Start() (err error) {
 		c.HQProducerChannel = make(chan *item.Item, c.Workers.Count)
 		c.HQFinishedChannel = make(chan *item.Item, c.Workers.Count)
 
-		c.HQChannelsWg.Add(2)
-		go c.HQConsumer()
-		go c.HQProducer()
-		go c.HQFinisher()
-		go c.HQWebsocket()
+		hq.Init(&hq.Config{
+			HQClient:          newHQClient,
+			HQProducerChannel: c.HQProducerChannel,
+			HQFinishedChannel: c.HQFinishedChannel,
+			HQProject:         c.HQProject,
+			HQStrategy:        c.HQStrategy,
+			Job:               c.Job,
+			HQBatchSize:       c.HQBatchSize,
+			WorkerCount:       c.Workers.Count,
+			ContinuousPull:    c.HQContinuousPull,
+			Queue:             c.Queue,
+			Logger:            c.Log,
+		})
 	} else {
 		// Push the seed list to the queue
 		c.Log.Info("Pushing seeds in the local queue..")

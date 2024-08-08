@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/CorentinB/warc"
-	"github.com/internetarchive/Zeno/internal/queue"
+	"github.com/internetarchive/Zeno/internal/item"
 	"github.com/internetarchive/Zeno/internal/stats"
 	"github.com/internetarchive/Zeno/internal/utils"
 	"github.com/sirupsen/logrus"
@@ -79,7 +79,7 @@ func (c *Crawl) genLogFields(err interface{}, URL interface{}, additionalFields 
 	return fields
 }
 
-func (c *Crawl) logCrawlSuccess(executionStart time.Time, statusCode int, item *queue.Item) {
+func (c *Crawl) logCrawlSuccess(executionStart time.Time, statusCode int, item *item.Item) {
 	fields := c.genLogFields(nil, item.URL, nil)
 
 	fields["statusCode"] = statusCode

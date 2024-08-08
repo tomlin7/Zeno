@@ -6,7 +6,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/internetarchive/Zeno/internal/processer"
+	"github.com/internetarchive/Zeno/internal/reactor"
 	"github.com/internetarchive/Zeno/internal/stats"
 )
 
@@ -37,7 +37,7 @@ func (crawl *Crawl) finish() {
 	crawl.Queue.FreezeDequeue()
 
 	crawl.Log.Warn("[PROCESSER] Stopping the processer")
-	processer.Stop()
+	reactor.Stop()
 
 	crawl.Log.Warn("[WORKERS] Waiting for workers to finish")
 	crawl.Workers.Stop <- struct{}{}
