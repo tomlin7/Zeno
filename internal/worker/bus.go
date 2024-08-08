@@ -116,7 +116,7 @@ func (b *Bus) run() {
 
 type consumer struct {
 	id   string
-	item chan *Item
+	item chan *item.Item
 	next chan struct{}
 	stop chan struct{}
 	done chan struct{}

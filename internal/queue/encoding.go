@@ -26,7 +26,7 @@ func encodeItem(item *item.Item) ([]byte, error) {
 		ParentUrl:       parentURLJSON,
 		ID:              item.ID,
 		Hop:             item.Hop,
-		Type:            item.Type,
+		Type:            item.Type.String(),
 		BypassSeencheck: item.BypassSeencheck,
 		Hash:            item.Hash,
 		Redirect:        item.Redirect,
@@ -55,15 +55,22 @@ func decodeProtoItem(itemBytes []byte) (*item.Item, error) {
 		return nil, fmt.Errorf("failed to unmarshal URL: %w", err)
 	}
 
-	return &item.Item{
+	decodedItem := &item.Item{
 		URL:             &URL,
 		ParentURL:       &parentURL,
 		Hop:             protoItem.GetHop(),
-		Type:            protoItem.GetType(),
 		ID:              protoItem.GetID(),
 		BypassSeencheck: protoItem.GetBypassSeencheck(),
 		Hash:            protoItem.GetHash(),
 		Redirect:        protoItem.GetRedirect(),
 		LocallyCrawled:  protoItem.GetLocallyCrawled(),
-	}, nil
+	}
+
+	itemType, err := item.TypeFromString(protoItem.GetType())
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse item type: %w", err)
+	}
+	decodedItem.Type = itemType
+
+	return decodedItem, nil
 }

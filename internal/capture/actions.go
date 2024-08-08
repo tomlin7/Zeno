@@ -43,9 +43,9 @@ func Capture(itemToCapture *item.Item) error {
 	}(itemToCapture)
 
 	// Prepare GET request
-	req, err := http.NewRequest("GET", utils.URLToString(item.URL), nil)
+	req, err := http.NewRequest("GET", utils.URLToString(itemToCapture.URL), nil)
 	if err != nil {
-		packageClient.logger.Error("error while preparing GET request", "error", err, "url", item.URL)
+		packageClient.logger.Error("error while preparing GET request", "error", err, "url", itemToCapture.URL)
 		return err
 	}
 
@@ -171,7 +171,7 @@ func Capture(itemToCapture *item.Item) error {
 		}
 
 		packageClient.hqProducerChannel <- newItem
-		packageClient.logger.Info("URL is being rate limited, sending back to HQ", "error", err, "url", itemToCapture.URL)
+		packageClient.logger.Info("URL is being rate limited, sent back to HQ, skipping reactor", "error", err, "url", itemToCapture.URL)
 		return err
 	} else if err != nil {
 		packageClient.logger.Error("error while executing GET request", "error", err, "url", itemToCapture.URL)
@@ -190,12 +190,12 @@ func Capture(itemToCapture *item.Item) error {
 	}
 
 	waitGroup.Add(1)
-	go c.queueOutlinks(utils.MakeAbsolute(item.URL, utils.StringSliceToURLSlice(discovered)), item, &waitGroup)
+	go queueOutlinks(utils.MakeAbsolute(itemToCapture.URL, utils.StringSliceToURLSlice(discovered)), itemToCapture, &waitGroup)
 
 	// Store the base URL to turn relative links into absolute links later
 	base, err := url.Parse(utils.URLToString(resp.Request.URL))
 	if err != nil {
-		c.Log.WithFields(c.genLogFields(err, item.URL, nil)).Error("error while parsing base URL")
+		packageClient.logger.Error("error while parsing base URL", "error", err, "url", itemToCapture.URL)
 		return err
 	}
 
@@ -203,18 +203,18 @@ func Capture(itemToCapture *item.Item) error {
 	if strings.Contains(resp.Header.Get("Content-Type"), "json") {
 		jsonBody, err := io.ReadAll(resp.Body)
 		if err != nil {
-			c.Log.WithFields(c.genLogFields(err, item.URL, nil)).Error("error while reading JSON body")
+			packageClient.logger.Error("error while reading JSON body", "error", err, "url", itemToCapture.URL)
 			return err
 		}
 
 		outlinksFromJSON, err := getURLsFromJSON(string(jsonBody))
 		if err != nil {
-			c.Log.WithFields(c.genLogFields(err, item.URL, nil)).Error("error while getting URLs from JSON")
+			packageClient.logger.Error("error while getting URLs from JSON", "error", err, "url", itemToCapture.URL)
 			return err
 		}
 
 		waitGroup.Add(1)
-		go c.queueOutlinks(utils.MakeAbsolute(item.URL, utils.StringSliceToURLSlice(outlinksFromJSON)), item, &waitGroup)
+		go queueOutlinks(utils.MakeAbsolute(itemToCapture.URL, utils.StringSliceToURLSlice(outlinksFromJSON)), itemToCapture, &waitGroup)
 
 		return err
 	}
@@ -223,13 +223,13 @@ func Capture(itemToCapture *item.Item) error {
 	if strings.Contains(resp.Header.Get("Content-Type"), "xml") {
 		xmlBody, err := io.ReadAll(resp.Body)
 		if err != nil {
-			c.Log.WithFields(c.genLogFields(err, item.URL, nil)).Error("error while reading XML body")
+			packageClient.logger.Error("error while reading XML body", "error", err, "url", itemToCapture.URL)
 			return err
 		}
 
 		mv, err := mxj.NewMapXml(xmlBody)
 		if err != nil {
-			c.Log.WithFields(c.genLogFields(err, item.URL, nil)).Error("error while parsing XML body")
+			packageClient.logger.Error("error while parsing XML body", "error", err, "url", itemToCapture.URL)
 			return err
 		}
 
@@ -244,11 +244,11 @@ func Capture(itemToCapture *item.Item) error {
 
 	// If the response isn't a text/*, we do not scrape it.
 	// We also aren't going to scrape if assets and outlinks are turned off.
-	if !strings.Contains(resp.Header.Get("Content-Type"), "text/") || (c.DisableAssetsCapture && !c.DomainsCrawl && (uint64(c.MaxHops) <= item.Hop)) {
+	if !strings.Contains(resp.Header.Get("Content-Type"), "text/") || (packageClient.disableAssetsCapture && !packageClient.domainsCrawl && (uint64(packageClient.maxHops) <= itemToCapture.Hop)) {
 		// Enforce reading all data from the response for WARC writing
 		_, err := io.Copy(io.Discard, resp.Body)
 		if err != nil {
-			c.Log.WithFields(c.genLogFields(err, item.URL, nil)).Error("error while reading response body")
+			packageClient.logger.Error("error while reading response body", "error", err, "url", itemToCapture.URL)
 		}
 
 		return err
@@ -257,25 +257,25 @@ func Capture(itemToCapture *item.Item) error {
 	// Turn the response into a doc that we will scrape for outlinks and assets.
 	doc, err := goquery.NewDocumentFromReader(resp.Body)
 	if err != nil {
-		c.Log.WithFields(c.genLogFields(err, item.URL, nil)).Error("error while creating goquery document")
+		packageClient.logger.Error("error while creating goquery document", "error", err, "url", itemToCapture.URL)
 		return err
 	}
 
 	// Execute site-specific code on the document
 	if strings.Contains(base.Host, "cloudflarestream.com") {
 		// Look for JS files necessary for the playback of the video
-		cfstreamURLs, err := cloudflarestream.GetJSFiles(doc, base, *c.Client)
+		cfstreamURLs, err := cloudflarestream.GetJSFiles(doc, base, *packageClient.client)
 		if err != nil {
-			c.Log.WithFields(c.genLogFields(err, item.URL, nil)).Error("error while getting JS files from cloudflarestream")
+			packageClient.logger.Error("error while getting JS files from cloudflarestream", "error", err, "url", itemToCapture.URL)
 			return err
 		}
 
 		// Seencheck the URLs we captured, we ignore the returned value here
 		// because we already archived the URLs, we just want them to be added
 		// to the seencheck table.
-		if c.UseSeencheck {
+		if packageClient.useSeencheck {
 			for _, cfstreamURL := range cfstreamURLs {
-				c.seencheckURL(cfstreamURL, "asset")
+				packageClient.seencheckURL(cfstreamURL, "asset")
 			}
 		} else if c.UseHQ {
 			_, err := c.HQSeencheckURLs(utils.StringSliceToURLSlice(cfstreamURLs))
@@ -621,7 +621,7 @@ func executeGET(item *queue.Item, req *http.Request, isRedirection bool) (resp *
 	return resp, nil
 }
 
-func captureAsset(item *queue.Item, cookies []*http.Cookie) error {
+func captureAsset(item *item.Item, cookies []*http.Cookie) error {
 	var resp *http.Response
 
 	// Prepare GET request

@@ -32,17 +32,17 @@ func TestDequeue(t *testing.T) {
 	url2, _ := url.Parse("http://example2.com")
 	url3, _ := url.Parse("http://example1.com/page")
 
-	item1, err := item.New(url1, nil, "test", 0, "1", false)
+	item1, err := item.New(url1, nil, item.TypeSeed, 0, "1", false)
 	if err != nil {
 		t.Fatalf("Failed to create item: %v", err)
 	}
 
-	item2, err := item.New(url2, nil, "test", 0, "2", false)
+	item2, err := item.New(url2, nil, item.TypeSeed, 0, "2", false)
 	if err != nil {
 		t.Fatalf("Failed to create item: %v", err)
 	}
 
-	item3, err := item.New(url3, nil, "test", 0, "3", false)
+	item3, err := item.New(url3, nil, item.TypeSeed, 0, "3", false)
 	if err != nil {
 		t.Fatalf("Failed to create item: %v", err)
 	}
@@ -115,7 +115,7 @@ func TestDequeueHostOrder(t *testing.T) {
 
 	for i, urlStr := range urls {
 		url, _ := url.Parse(urlStr)
-		item, err := item.New(url, nil, "test", 0, fmt.Sprint(i), false)
+		item, err := item.New(url, nil, item.TypeSeed, 0, fmt.Sprint(i), false)
 		if err != nil {
 			t.Fatalf("Failed to create item: %v", err)
 		}

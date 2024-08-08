@@ -9,8 +9,8 @@ import (
 	"git.archive.org/wb/gocrawlhq"
 	"github.com/internetarchive/Zeno/internal/capture"
 	"github.com/internetarchive/Zeno/internal/item"
-	"github.com/internetarchive/Zeno/internal/processer"
 	"github.com/internetarchive/Zeno/internal/queue"
+	"github.com/internetarchive/Zeno/internal/reactor"
 	"github.com/internetarchive/Zeno/internal/seencheck"
 	"github.com/internetarchive/Zeno/internal/stats"
 	"github.com/internetarchive/Zeno/internal/utils"
@@ -146,25 +146,30 @@ func (c *Crawl) Start() (err error) {
 	// Initialize WARC writer
 	c.Log.Info("Initializing WARC writer in capture..")
 	capture.Init(&capture.Config{
-		WARCPrefix:         c.WARCPrefix,
-		WARCPoolSize:       c.WARCPoolSize,
-		WARCTempDir:        c.WARCTempDir,
-		WARCFullOnDisk:     c.WARCFullOnDisk,
-		WARCDedupSize:      c.WARCDedupSize,
-		DisableLocalDedupe: c.DisableLocalDedupe,
-		CDXDedupeServer:    c.CDXDedupeServer,
-		WARCCustomCookie:   c.WARCCustomCookie,
-		CertValidation:     c.CertValidation,
-		WARCOperator:       c.WARCOperator,
-		JobPath:            c.JobPath,
-		HTTPTimeout:        c.HTTPTimeout,
-		UserAgent:          c.UserAgent,
-		Proxy:              c.Proxy,
-		RandomLocalIP:      c.RandomLocalIP,
-		ParentLogger:       c.Log,
-		UseHQ:              c.UseHQ,
-		HQFinishedChannel:  c.HQFinishedChannel,
-		HQProducerChannel:  c.HQProducerChannel,
+		WARCPrefix:           c.WARCPrefix,
+		WARCPoolSize:         c.WARCPoolSize,
+		WARCTempDir:          c.WARCTempDir,
+		WARCFullOnDisk:       c.WARCFullOnDisk,
+		WARCDedupSize:        c.WARCDedupSize,
+		DisableLocalDedupe:   c.DisableLocalDedupe,
+		CDXDedupeServer:      c.CDXDedupeServer,
+		WARCCustomCookie:     c.WARCCustomCookie,
+		CertValidation:       c.CertValidation,
+		WARCOperator:         c.WARCOperator,
+		JobPath:              c.JobPath,
+		HTTPTimeout:          c.HTTPTimeout,
+		UserAgent:            c.UserAgent,
+		Proxy:                c.Proxy,
+		RandomLocalIP:        c.RandomLocalIP,
+		ParentLogger:         c.Log,
+		UseHQ:                c.UseHQ,
+		HQFinishedChannel:    c.HQFinishedChannel,
+		HQProducerChannel:    c.HQProducerChannel,
+		DisableAssetsCapture: c.DisableAssetsCapture,
+		DomainsCrawl:         c.DomainsCrawl,
+		MaxHops:              uint64(c.MaxHops),
+		UseSeencheck:         c.UseSeencheck,
+		Seencheck:            c.Seencheck,
 	})
 	c.Log.Info("WARC writer initialized")
 
@@ -176,9 +181,16 @@ func (c *Crawl) Start() (err error) {
 	// Also starts all the background processes that will handle the workers
 	c.Workers.Start()
 
-	// Start the processer
-	// The processer is responsible for dequeueing items, processing them (excluding etc) and sending them to the workers
-	processer.Init(c.Workers, c.Queue)
+	// Start the reactor
+	// The reactor is responsible for dequeueing items, processing them (excluding etc) and sending them to who needs them
+	reactor.Init(&reactor.Config{
+		UseWorkers:   true,
+		WorkerRecvCh: c.Workers.Recv,
+		UseQueue:     true,
+		Queue:        c.Queue,
+		UseHQ:        c.UseHQ,
+		HQProducer:   c.HQProducerChannel,
+	})
 
 	// Set the crawl state to running
 	stats.SetCrawlState("running")

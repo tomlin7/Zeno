@@ -43,7 +43,7 @@ var getURLCmd = &cobra.Command{
 				return err
 			}
 
-			item, err := item.New(input, nil, "seed", 0, "", false)
+			item, err := item.New(input, nil, item.TypeSeed, 0, "", false)
 			if err != nil {
 				crawl.Log.WithFields(map[string]interface{}{
 					"input_url": arg,

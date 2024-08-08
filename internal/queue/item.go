@@ -73,7 +73,7 @@ func FileToItems(path string) (seeds []item.Item, err error) {
 			continue
 		}
 
-		item, err := item.New(URL, nil, "seed", 0, "", false)
+		item, err := item.New(URL, nil, item.TypeSeed, 0, "", false)
 		if err != nil {
 			logrus.WithFields(logrus.Fields{
 				"url": scanner.Text(),

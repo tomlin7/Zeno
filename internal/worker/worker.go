@@ -6,6 +6,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/internetarchive/Zeno/internal/capture"
+	"github.com/internetarchive/Zeno/internal/item"
 	"github.com/internetarchive/Zeno/internal/log"
 	"github.com/internetarchive/Zeno/internal/stats"
 )
@@ -29,8 +30,8 @@ func (s status) String() string {
 }
 
 type workerState struct {
-	currentItem  *Item
-	previousItem *Item
+	currentItem  *item.Item
+	previousItem *item.Item
 	status       status
 	lastAction   string
 	lastError    error
@@ -43,7 +44,7 @@ type Worker struct {
 	state  *workerState
 	stop   chan struct{}
 	done   chan struct{}
-	item   chan *Item
+	item   chan *item.Item
 	pool   *Pool
 	logger *log.FieldedLogger
 }
@@ -63,7 +64,7 @@ func (wp *Pool) newWorker() *Worker {
 		},
 		stop: make(chan struct{}),
 		done: make(chan struct{}),
-		item: make(chan *Item),
+		item: make(chan *item.Item),
 
 		pool: wp,
 	}
@@ -124,7 +125,7 @@ func (w *Worker) Run() {
 }
 
 // unsafeCapture is named like so because it should only be called when the worker is locked
-func (w *Worker) unsafeCapture(item *Item) {
+func (w *Worker) unsafeCapture(item *item.Item) {
 	if item == nil {
 		return
 	}
@@ -136,17 +137,7 @@ func (w *Worker) unsafeCapture(item *Item) {
 
 	// Capture the item
 	w.state.lastAction = "capturing item"
-	w.state.lastError = capture.Capture(&capture.Item{
-		URL:             item.URL,
-		ParentURL:       item.ParentURL,
-		Hop:             item.Hop,
-		Type:            item.Type,
-		ID:              item.ID,
-		BypassSeencheck: item.BypassSeencheck,
-		Hash:            item.Hash,
-		LocallyCrawled:  item.LocallyCrawled,
-		Redirect:        item.Redirect,
-	})
+	w.state.lastError = capture.Capture(item)
 
 	// Signals that the worker has finished processing the item
 	w.state.lastAction = "finished capturing"

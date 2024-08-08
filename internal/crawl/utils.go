@@ -2,10 +2,8 @@ package crawl
 
 import (
 	"fmt"
-	"hash/fnv"
 	"net/url"
 	"regexp"
-	"strconv"
 	"time"
 
 	"github.com/internetarchive/Zeno/internal/stats"
@@ -77,20 +75,6 @@ func (c *Crawl) handleCrawlPause() {
 		}
 
 		time.Sleep(time.Second)
-	}
-}
-
-func (c *Crawl) seencheckURL(URL string, URLType string) bool {
-	h := fnv.New64a()
-	h.Write([]byte(URL))
-	hash := strconv.FormatUint(h.Sum64(), 10)
-
-	found, _ := c.Seencheck.IsSeen(hash)
-	if found {
-		return true
-	} else {
-		c.Seencheck.Seen(hash, URLType)
-		return false
 	}
 }
 

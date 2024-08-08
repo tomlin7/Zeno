@@ -28,7 +28,7 @@ func TestEnqueue(t *testing.T) {
 		defer q.Close()
 
 		url, _ := url.Parse("http://example.fr")
-		item, err := item.New(url, nil, "test", 0, "", false)
+		item, err := item.New(url, nil, item.TypeSeed, 0, "", false)
 		if err != nil {
 			t.Fatalf("Failed to create item: %v", err)
 		}
@@ -72,7 +72,7 @@ func TestEnqueue(t *testing.T) {
 
 		for _, host := range hosts {
 			url, _ := url.Parse("http://" + host)
-			item, err := item.New(url, nil, "test", 0, "", false)
+			item, err := item.New(url, nil, item.TypeSeed, 0, "", false)
 			if err != nil {
 				t.Fatalf("Failed to create item for host %s: %v", host, err)
 			}
@@ -119,7 +119,7 @@ func TestEnqueue(t *testing.T) {
 		q.Close()
 
 		url, _ := url.Parse("http://closed.com")
-		item, err := item.New(url, nil, "test", 0, "", false)
+		item, err := item.New(url, nil, item.TypeSeed, 0, "", false)
 		if err != nil {
 			t.Fatalf("Failed to create item: %v", err)
 		}
@@ -146,7 +146,7 @@ func TestEnqueue(t *testing.T) {
 		defer q.Close()
 
 		url, _ := url.Parse("http://timetest.com")
-		item, err := item.New(url, nil, "test", 0, "", false)
+		item, err := item.New(url, nil, item.TypeSeed, 0, "", false)
 		if err != nil {
 			t.Fatalf("Failed to create item: %v", err)
 		}
@@ -202,7 +202,7 @@ func TestEnqueue(t *testing.T) {
 		hosts := []string{"first.com", "second.com", "third.com"}
 		for _, host := range hosts {
 			url, _ := url.Parse("http://" + host)
-			item, err := item.New(url, nil, "test", 0, "", false)
+			item, err := item.New(url, nil, item.TypeSeed, 0, "", false)
 			if err != nil {
 				t.Fatalf("Failed to create item: %v", err)
 			}
@@ -246,7 +246,7 @@ func TestBatchEnqueue(t *testing.T) {
 		defer q.Close()
 
 		url, _ := url.Parse("http://example.fr")
-		item, err := item.New(url, nil, "test", 0, "", false)
+		item, err := item.New(url, nil, item.TypeSeed, 0, "", false)
 		if err != nil {
 			t.Fatalf("Failed to create item: %v", err)
 		}
@@ -295,7 +295,7 @@ func TestBatchEnqueue(t *testing.T) {
 
 		for _, host := range hosts {
 			url, _ := url.Parse("http://" + host)
-			item, err := item.New(url, nil, "test", 0, "", false)
+			item, err := item.New(url, nil, item.TypeSeed, 0, "", false)
 			if err != nil {
 				t.Fatalf("Failed to create item for host %s: %v", host, err)
 			}
@@ -343,7 +343,7 @@ func TestBatchEnqueue(t *testing.T) {
 		q.Close()
 
 		url, _ := url.Parse("http://closed.com")
-		item, err := item.New(url, nil, "test", 0, "", false)
+		item, err := item.New(url, nil, item.TypeSeed, 0, "", false)
 		if err != nil {
 			t.Fatalf("Failed to create item: %v", err)
 		}
@@ -370,7 +370,7 @@ func TestBatchEnqueue(t *testing.T) {
 		defer q.Close()
 
 		url, _ := url.Parse("http://timetest.com")
-		item, err := item.New(url, nil, "test", 0, "", false)
+		item, err := item.New(url, nil, item.TypeSeed, 0, "", false)
 		if err != nil {
 			t.Fatalf("Failed to create item: %v", err)
 		}
@@ -429,7 +429,7 @@ func TestBatchEnqueue(t *testing.T) {
 		hosts := []string{"first.com", "second.com", "third.com"}
 		for _, host := range hosts {
 			url, _ := url.Parse("http://" + host)
-			item, err := item.New(url, nil, "test", 0, "", false)
+			item, err := item.New(url, nil, item.TypeSeed, 0, "", false)
 			if err != nil {
 				t.Fatalf("Failed to create item: %v", err)
 			}

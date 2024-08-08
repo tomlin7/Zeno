@@ -14,7 +14,7 @@ func TestNewItem(t *testing.T) {
 		name             string
 		url              string
 		parentURL        string
-		itemType         string
+		itemType         item.Type
 		hop              uint64
 		id               string
 		bypassSeencheck  bool
@@ -24,7 +24,7 @@ func TestNewItem(t *testing.T) {
 			name:             "Basic URL",
 			url:              "https://example.com/page",
 			parentURL:        "",
-			itemType:         "page",
+			itemType:         item.TypeSeed,
 			hop:              1,
 			id:               "",
 			bypassSeencheck:  false,
@@ -34,7 +34,7 @@ func TestNewItem(t *testing.T) {
 			name:             "URL with ID and BypassSeencheck",
 			url:              "https://test.org/resource",
 			parentURL:        "parent.com",
-			itemType:         "resource",
+			itemType:         item.TypeSeed,
 			hop:              2,
 			id:               "custom-id",
 			bypassSeencheck:  true,

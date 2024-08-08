@@ -51,6 +51,8 @@ func (c *Crawl) HQWebsocket() {
 	}
 }
 
+// HQProducer send items to HQ
+// Use channel HQProducerChannel to send items to HQ
 func (c *Crawl) HQProducer() {
 	defer c.HQChannelsWg.Done()
 
@@ -148,6 +150,7 @@ func (c *Crawl) HQProducer() {
 	terminateProducer <- true
 }
 
+// HQConsumer fetch URLs from HQ
 func (c *Crawl) HQConsumer() {
 	for {
 		// This is on purpose evaluated every time,
@@ -222,6 +225,7 @@ func (c *Crawl) HQConsumer() {
 	}
 }
 
+// HQFinisher send finished URLs to HQ to mark them as finished
 func (c *Crawl) HQFinisher() {
 	defer c.HQChannelsWg.Done()
 

@@ -6,6 +6,7 @@ import (
 	"github.com/CorentinB/warc"
 	"github.com/internetarchive/Zeno/internal/item"
 	"github.com/internetarchive/Zeno/internal/log"
+	"github.com/internetarchive/Zeno/internal/seencheck"
 )
 
 type Config struct {
@@ -23,6 +24,15 @@ type Config struct {
 	// WARC rotator settings
 	WARCOperator string
 	JobPath      string
+
+	// Crawls settings
+	DisableAssetsCapture bool
+	DomainsCrawl         bool
+	MaxHops              uint64
+
+	// Seencheck settings
+	UseSeencheck bool
+	Seencheck    *seencheck.Seencheck
 
 	// HTTP settings
 	HTTPTimeout   int
@@ -50,6 +60,13 @@ type client struct {
 	useHQ             bool
 	hqFinishedChannel chan *item.Item
 	hqProducerChannel chan *item.Item
+
+	// Outlinks local processing
+	domainsCrawl         bool
+	maxHops              uint64
+	disableAssetsCapture bool
+	useSeencheck         bool
+	seencheck            *seencheck.Seencheck
 
 	// Internal
 	logger *log.FieldedLogger
@@ -124,25 +141,21 @@ func Init(config *Config) {
 			}
 		}()
 
-		newClient = &client{
-			client:                   newHTTPClient,
-			proxiedClient:            newProxiedHTTPClient,
-			userAgent:                config.UserAgent,
-			stopMonitorWARCWaitGroup: make(chan struct{}),
-			useHQ:                    config.UseHQ,
-			hqFinishedChannel:        config.HQFinishedChannel,
-			logger:                   fieldedLogger,
-		}
-	} else {
-		newClient = &client{
-			client:                   newHTTPClient,
-			userAgent:                config.UserAgent,
-			stopMonitorWARCWaitGroup: make(chan struct{}),
-			useHQ:                    config.UseHQ,
-			hqFinishedChannel:        config.HQFinishedChannel,
-			logger:                   fieldedLogger,
-		}
+		newClient.proxiedClient = newProxiedHTTPClient
 	}
+
+	newClient.client = newHTTPClient
+	newClient.useHQ = config.UseHQ
+	newClient.hqFinishedChannel = config.HQFinishedChannel
+	newClient.hqProducerChannel = config.HQProducerChannel
+	newClient.logger = fieldedLogger
+	newClient.stopMonitorWARCWaitGroup = make(chan struct{})
+	newClient.userAgent = config.UserAgent
+	newClient.domainsCrawl = config.DomainsCrawl
+	newClient.maxHops = config.MaxHops
+	newClient.disableAssetsCapture = config.DisableAssetsCapture
+	newClient.useSeencheck = config.UseSeencheck
+	newClient.seencheck = config.Seencheck
 
 	if !isinit {
 		packageClient = newClient

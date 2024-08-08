@@ -12,7 +12,7 @@ type Item struct {
 	URL             *url.URL
 	ParentURL       *url.URL
 	Hop             uint64
-	Type            string
+	Type            Type
 	ID              string
 	BypassSeencheck bool
 	Hash            uint64
@@ -20,7 +20,7 @@ type Item struct {
 	Redirect        uint64
 }
 
-func New(URL *url.URL, parentURL *url.URL, itemType string, hop uint64, ID string, bypassSeencheck bool) (*Item, error) {
+func New(URL *url.URL, parentURL *url.URL, itemType Type, hop uint64, ID string, bypassSeencheck bool) (*Item, error) {
 	h := fnv.New64a()
 	h.Write([]byte(utils.URLToString(URL)))
 

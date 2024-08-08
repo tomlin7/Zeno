@@ -127,7 +127,7 @@ func TestLargeScaleEnqueueDequeue(t *testing.T) {
 	for i := 0; i < numItems; i++ {
 		host := hosts[i%len(hosts)]
 		u, _ := url.Parse(fmt.Sprintf("https://%s/page%d", host, i))
-		item, err := item.New(u, nil, "page", 1, fmt.Sprintf("id-%d", i), false)
+		item, err := item.New(u, nil, item.TypeSeed, 1, fmt.Sprintf("id-%d", i), false)
 		if err != nil {
 			t.Fatalf("Failed to create item %d: %v", i, err)
 		}
@@ -196,17 +196,17 @@ func TestParallelQueueBehavior(t *testing.T) {
 	url2, _ := url.Parse("http://example.com/")
 	url3, _ := url.Parse("http://example.com/page")
 
-	item1, err := item.New(url1, nil, "page", 1, "1", false)
+	item1, err := item.New(url1, nil, item.TypeSeed, 1, "1", false)
 	if err != nil {
 		t.Fatalf("Failed to create item: %v", err)
 	}
 
-	item2, err := item.New(url2, nil, "page", 1, "2", false)
+	item2, err := item.New(url2, nil, item.TypeSeed, 1, "2", false)
 	if err != nil {
 		t.Fatalf("Failed to create item: %v", err)
 	}
 
-	item3, err := item.New(url3, nil, "page", 1, "3", false)
+	item3, err := item.New(url3, nil, item.TypeSeed, 1, "3", false)
 	if err != nil {
 		t.Fatalf("Failed to create item: %v", err)
 	}
@@ -263,7 +263,7 @@ func TestParallelQueueBehavior(t *testing.T) {
 		host := hosts[i%len(hosts)]
 
 		u, _ := url.Parse(fmt.Sprintf("http://%s/page%d", host, i))
-		itemToEnqueue, err := item.New(u, nil, "page", 1, fmt.Sprintf("id-%d", i), false)
+		itemToEnqueue, err := item.New(u, nil, item.TypeSeed, 1, fmt.Sprintf("id-%d", i), false)
 		if err != nil {
 			t.Fatalf("Failed to create item %d: %v", i, err)
 		}
@@ -358,7 +358,7 @@ Notes:
 			for i := 0; i < numItems; i++ {
 				host := hosts[i%len(hosts)]
 				u, _ := url.Parse(fmt.Sprintf("https://%s/page%d", host, i))
-				item, err := item.New(u, nil, "page", 1, fmt.Sprintf("id-%d", i), false)
+				item, err := item.New(u, nil, item.TypeSeed, 1, fmt.Sprintf("id-%d", i), false)
 				if err != nil {
 					b.Fatalf("Failed to create item %d: %v", i, err)
 				}
@@ -455,7 +455,7 @@ Notes:
 			for i := 0; i < numItems; i++ {
 				host := hosts[i%len(hosts)]
 				u, _ := url.Parse(fmt.Sprintf("https://%s/page%d", host, i))
-				item, err := item.New(u, nil, "page", 1, fmt.Sprintf("id-%d", i), false)
+				item, err := item.New(u, nil, item.TypeSeed, 1, fmt.Sprintf("id-%d", i), false)
 				if err != nil {
 					b.Fatalf("Failed to create item %d: %v", i, err)
 				}
@@ -533,7 +533,7 @@ func TestQueueEmptyBool(t *testing.T) {
 	}
 
 	url, _ := url.Parse("http://example.com/")
-	item, err := item.New(url, nil, "page", 1, "1", false)
+	item, err := item.New(url, nil, item.TypeSeed, 1, "1", false)
 	if err != nil {
 		t.Fatalf("Failed to create item: %v", err)
 	}
