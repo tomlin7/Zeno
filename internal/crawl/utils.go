@@ -13,6 +13,17 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+const (
+	// B represent a Byte
+	B = 1
+	// KB represent a Kilobyte
+	KB = 1024 * B
+	// MB represent a MegaByte
+	MB = 1024 * KB
+	// GB represent a GigaByte
+	GB = 1024 * MB
+)
+
 var regexOutlinks *regexp.Regexp
 
 // TODO: re-implement host limitation
@@ -37,7 +48,7 @@ var regexOutlinks *regexp.Regexp
 // 	}
 // }
 
-func (c *Crawl) checkIncludedHosts(host string) bool {
+func (c *Crawl) CheckIncludedHosts(host string) bool {
 	// If no hosts are included, all hosts are included
 	if len(c.IncludedHosts) == 0 {
 		return true
@@ -54,10 +65,12 @@ func (c *Crawl) handleCrawlPause() {
 				"Please free some space for the crawler to resume.", c.MinSpaceRequired, spaceLeft))
 			c.Paused.Set(true)
 			c.Queue.Paused.Set(true)
+			c.Workers.Pause <- struct{}{}
 			stats.SetCrawlState("paused")
 		} else {
 			c.Paused.Set(false)
 			c.Queue.Paused.Set(false)
+			c.Workers.Unpause <- struct{}{}
 			if stats.GetCrawlState() == "paused" {
 				stats.SetCrawlState("running")
 			}
@@ -83,7 +96,7 @@ func (c *Crawl) seencheckURL(URL string, URLType string) bool {
 
 func (c *Crawl) excludeHosts(URLs []*url.URL) (output []*url.URL) {
 	for _, URL := range URLs {
-		if utils.StringInSlice(URL.Host, c.ExcludedHosts) || !c.checkIncludedHosts(URL.Host) {
+		if utils.StringInSlice(URL.Host, c.ExcludedHosts) || !c.CheckIncludedHosts(URL.Host) {
 			continue
 		} else {
 			output = append(output, URL)

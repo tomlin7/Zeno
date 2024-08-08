@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	"github.com/PuerkitoBio/goquery"
-	"github.com/internetarchive/Zeno/internal/crawl/sitespecific/cloudflarestream"
+	"github.com/internetarchive/Zeno/internal/capture/sitespecific/cloudflarestream"
 	"github.com/internetarchive/Zeno/internal/queue"
 	"github.com/internetarchive/Zeno/internal/utils"
 )

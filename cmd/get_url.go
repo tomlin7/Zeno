@@ -5,7 +5,7 @@ import (
 	"net/url"
 
 	"github.com/internetarchive/Zeno/internal/crawl"
-	"github.com/internetarchive/Zeno/internal/queue"
+	"github.com/internetarchive/Zeno/internal/item"
 	"github.com/spf13/cobra"
 )
 
@@ -43,7 +43,7 @@ var getURLCmd = &cobra.Command{
 				return err
 			}
 
-			item, err := queue.NewItem(input, nil, "seed", 0, "", false)
+			item, err := item.New(input, nil, "seed", 0, "", false)
 			if err != nil {
 				crawl.Log.WithFields(map[string]interface{}{
 					"input_url": arg,

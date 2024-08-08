@@ -1,4 +1,4 @@
-package crawl
+package capture
 
 import (
 	"slices"

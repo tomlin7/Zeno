@@ -6,6 +6,7 @@ import (
 	"os"
 	"testing"
 
+	"github.com/internetarchive/Zeno/internal/item"
 	"github.com/internetarchive/Zeno/internal/stats"
 )
 
@@ -31,22 +32,22 @@ func TestDequeue(t *testing.T) {
 	url2, _ := url.Parse("http://example2.com")
 	url3, _ := url.Parse("http://example1.com/page")
 
-	item1, err := NewItem(url1, nil, "test", 0, "1", false)
+	item1, err := item.New(url1, nil, "test", 0, "1", false)
 	if err != nil {
 		t.Fatalf("Failed to create item: %v", err)
 	}
 
-	item2, err := NewItem(url2, nil, "test", 0, "2", false)
+	item2, err := item.New(url2, nil, "test", 0, "2", false)
 	if err != nil {
 		t.Fatalf("Failed to create item: %v", err)
 	}
 
-	item3, err := NewItem(url3, nil, "test", 0, "3", false)
+	item3, err := item.New(url3, nil, "test", 0, "3", false)
 	if err != nil {
 		t.Fatalf("Failed to create item: %v", err)
 	}
 
-	items := []*Item{item1, item2, item3}
+	items := []*item.Item{item1, item2, item3}
 
 	for _, item := range items {
 		err = q.Enqueue(item)
@@ -114,7 +115,7 @@ func TestDequeueHostOrder(t *testing.T) {
 
 	for i, urlStr := range urls {
 		url, _ := url.Parse(urlStr)
-		item, err := NewItem(url, nil, "test", 0, fmt.Sprint(i), false)
+		item, err := item.New(url, nil, "test", 0, fmt.Sprint(i), false)
 		if err != nil {
 			t.Fatalf("Failed to create item: %v", err)
 		}

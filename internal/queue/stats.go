@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/internetarchive/Zeno/internal/item"
 	"github.com/internetarchive/Zeno/internal/stats"
 )
 
@@ -27,7 +28,7 @@ func (q *PersistentGroupedQueue) updateDequeueStats(host string) error {
 	return nil
 }
 
-func updateEnqueueStats(items ...*Item) error {
+func updateEnqueueStats(items ...*item.Item) error {
 	var err error
 
 	for _, item := range items {

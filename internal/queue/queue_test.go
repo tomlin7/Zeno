@@ -8,6 +8,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/internetarchive/Zeno/internal/item"
 )
 
 func TestNewPersistentGroupedQueue(t *testing.T) {
@@ -92,7 +94,7 @@ func TestPersistentGroupedQueue_Close(t *testing.T) {
 		t.Fatalf("Expected ErrDequeueClosed on Dequeue after Close, got: %v", err)
 	}
 
-	err = q.Enqueue(&Item{})
+	err = q.Enqueue(&item.Item{})
 	if err != ErrQueueClosed {
 		t.Fatalf("Expected ErrQueueClosed on Enqueue after Close, got: %v", err)
 	}
@@ -125,7 +127,7 @@ func TestLargeScaleEnqueueDequeue(t *testing.T) {
 	for i := 0; i < numItems; i++ {
 		host := hosts[i%len(hosts)]
 		u, _ := url.Parse(fmt.Sprintf("https://%s/page%d", host, i))
-		item, err := NewItem(u, nil, "page", 1, fmt.Sprintf("id-%d", i), false)
+		item, err := item.New(u, nil, "page", 1, fmt.Sprintf("id-%d", i), false)
 		if err != nil {
 			t.Fatalf("Failed to create item %d: %v", i, err)
 		}
@@ -194,22 +196,22 @@ func TestParallelQueueBehavior(t *testing.T) {
 	url2, _ := url.Parse("http://example.com/")
 	url3, _ := url.Parse("http://example.com/page")
 
-	item1, err := NewItem(url1, nil, "page", 1, "1", false)
+	item1, err := item.New(url1, nil, "page", 1, "1", false)
 	if err != nil {
 		t.Fatalf("Failed to create item: %v", err)
 	}
 
-	item2, err := NewItem(url2, nil, "page", 1, "2", false)
+	item2, err := item.New(url2, nil, "page", 1, "2", false)
 	if err != nil {
 		t.Fatalf("Failed to create item: %v", err)
 	}
 
-	item3, err := NewItem(url3, nil, "page", 1, "3", false)
+	item3, err := item.New(url3, nil, "page", 1, "3", false)
 	if err != nil {
 		t.Fatalf("Failed to create item: %v", err)
 	}
 
-	var items []*Item
+	var items []*item.Item
 	items = append(items, item1, item2, item3)
 
 	// Enqueue the 3 items in parallel
@@ -218,15 +220,15 @@ func TestParallelQueueBehavior(t *testing.T) {
 
 	errCh := make(chan error, 3)
 
-	for i, item := range items {
-		go func(j int, item *Item) {
+	for i, itemToEnqueue := range items {
+		go func(j int, item *item.Item) {
 			defer wg.Done()
 
 			err := queue.Enqueue(item)
 			if err != nil {
 				errCh <- fmt.Errorf("Failed to enqueue item %d: %v", j, err)
 			}
-		}(i, item)
+		}(i, itemToEnqueue)
 	}
 
 	wg.Wait()
@@ -261,19 +263,19 @@ func TestParallelQueueBehavior(t *testing.T) {
 		host := hosts[i%len(hosts)]
 
 		u, _ := url.Parse(fmt.Sprintf("http://%s/page%d", host, i))
-		item, err := NewItem(u, nil, "page", 1, fmt.Sprintf("id-%d", i), false)
+		itemToEnqueue, err := item.New(u, nil, "page", 1, fmt.Sprintf("id-%d", i), false)
 		if err != nil {
 			t.Fatalf("Failed to create item %d: %v", i, err)
 		}
 
-		go func(j int, item *Item) {
+		go func(j int, item *item.Item) {
 			defer wg.Done()
 
 			err := queue.Enqueue(item)
 			if err != nil {
 				errCh <- fmt.Errorf("Failed to enqueue item %d: %v", j, err)
 			}
-		}(i, item)
+		}(i, itemToEnqueue)
 	}
 
 	wg.Wait()
@@ -356,7 +358,7 @@ Notes:
 			for i := 0; i < numItems; i++ {
 				host := hosts[i%len(hosts)]
 				u, _ := url.Parse(fmt.Sprintf("https://%s/page%d", host, i))
-				item, err := NewItem(u, nil, "page", 1, fmt.Sprintf("id-%d", i), false)
+				item, err := item.New(u, nil, "page", 1, fmt.Sprintf("id-%d", i), false)
 				if err != nil {
 					b.Fatalf("Failed to create item %d: %v", i, err)
 				}
@@ -449,11 +451,11 @@ Notes:
 			b.Logf("——————————————————————— RUN %d ———————————————————————", i+1)
 			// Enqueue items
 			startEnqueue := time.Now()
-			items := make([]*Item, 0, numItems)
+			items := make([]*item.Item, 0, numItems)
 			for i := 0; i < numItems; i++ {
 				host := hosts[i%len(hosts)]
 				u, _ := url.Parse(fmt.Sprintf("https://%s/page%d", host, i))
-				item, err := NewItem(u, nil, "page", 1, fmt.Sprintf("id-%d", i), false)
+				item, err := item.New(u, nil, "page", 1, fmt.Sprintf("id-%d", i), false)
 				if err != nil {
 					b.Fatalf("Failed to create item %d: %v", i, err)
 				}
@@ -531,7 +533,7 @@ func TestQueueEmptyBool(t *testing.T) {
 	}
 
 	url, _ := url.Parse("http://example.com/")
-	item, err := NewItem(url, nil, "page", 1, "1", false)
+	item, err := item.New(url, nil, "page", 1, "1", false)
 	if err != nil {
 		t.Fatalf("Failed to create item: %v", err)
 	}

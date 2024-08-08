@@ -3,17 +3,18 @@ package queue
 import (
 	"fmt"
 
+	"github.com/internetarchive/Zeno/internal/item"
 	"github.com/internetarchive/Zeno/internal/queue/index"
 	"github.com/internetarchive/Zeno/internal/stats"
 )
 
 // Dequeue removes and returns the next item from the queue
 // It blocks until an item is available
-func (q *PersistentGroupedQueue) Dequeue() (*Item, error) {
+func (q *PersistentGroupedQueue) Dequeue() (*item.Item, error) {
 	return q.dequeueOp()
 }
 
-func (q *PersistentGroupedQueue) dequeueNoCommit() (*Item, error) {
+func (q *PersistentGroupedQueue) dequeueNoCommit() (*item.Item, error) {
 	if !q.CanDequeue() {
 		return nil, ErrDequeueClosed
 	}
@@ -73,7 +74,7 @@ func (q *PersistentGroupedQueue) dequeueNoCommit() (*Item, error) {
 	return item, nil
 }
 
-func (q *PersistentGroupedQueue) dequeueCommitted() (*Item, error) {
+func (q *PersistentGroupedQueue) dequeueCommitted() (*item.Item, error) {
 	if !q.CanDequeue() {
 		return nil, ErrDequeueClosed
 	}

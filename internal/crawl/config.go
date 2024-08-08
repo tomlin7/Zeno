@@ -12,17 +12,19 @@ import (
 	"github.com/CorentinB/warc"
 	"github.com/google/uuid"
 	"github.com/internetarchive/Zeno/internal/config"
+	"github.com/internetarchive/Zeno/internal/item"
 	"github.com/internetarchive/Zeno/internal/log"
 	"github.com/internetarchive/Zeno/internal/queue"
 	"github.com/internetarchive/Zeno/internal/seencheck"
 	"github.com/internetarchive/Zeno/internal/utils"
+	"github.com/internetarchive/Zeno/internal/worker"
 )
 
 // Crawl define the parameters of a crawl process
 type Crawl struct {
 	*sync.Mutex
 	StartTime time.Time
-	SeedList  []queue.Item
+	SeedList  []item.Item
 	Paused    *utils.TAtomBool
 	Finished  *utils.TAtomBool
 
@@ -41,7 +43,7 @@ type Crawl struct {
 	UseCommit    bool
 
 	// Worker pool
-	Workers *WorkerPool
+	Workers *worker.Pool
 
 	// Crawl settings
 	MaxConcurrentAssets            int
@@ -108,8 +110,8 @@ type Crawl struct {
 	HQBatchSize            int
 	HQContinuousPull       bool
 	HQClient               *gocrawlhq.Client
-	HQFinishedChannel      chan *queue.Item
-	HQProducerChannel      chan *queue.Item
+	HQFinishedChannel      chan *item.Item
+	HQProducerChannel      chan *item.Item
 	HQChannelsWg           *sync.WaitGroup
 	HQRateLimitingSendBack bool
 }
@@ -180,7 +182,7 @@ func GenerateCrawlConfig(config *config.Config) (*Crawl, error) {
 
 	c.JobPath = path.Join("jobs", config.Job)
 
-	c.Workers = NewPool(uint(config.WorkersCount), time.Second*60, c)
+	c.Workers = worker.NewPool(uint(config.WorkersCount), time.Second*60)
 
 	c.UseSeencheck = config.LocalSeencheck
 	c.HTTPTimeout = config.HTTPTimeout

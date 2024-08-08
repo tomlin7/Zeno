@@ -5,21 +5,23 @@ import (
 	"fmt"
 	"io"
 	"sync"
+
+	"github.com/internetarchive/Zeno/internal/item"
 )
 
 // BatchEnqueue adds 1 or many items to the queue in a single operation.
 // If multiple items are provided, the order in which they will be enqueued is not guaranteed.
 // It WILL be less efficient than Enqueue for single items.
-func (q *PersistentGroupedQueue) BatchEnqueue(items ...*Item) error {
+func (q *PersistentGroupedQueue) BatchEnqueue(items ...*item.Item) error {
 	return q.batchEnqueueOp(items...)
 }
 
 // Enqueue adds an item to the queue.
-func (q *PersistentGroupedQueue) Enqueue(item *Item) error {
+func (q *PersistentGroupedQueue) Enqueue(item *item.Item) error {
 	return q.enqueueOp(item)
 }
 
-func (q *PersistentGroupedQueue) batchEnqueueNoCommit(items ...*Item) error {
+func (q *PersistentGroupedQueue) batchEnqueueNoCommit(items ...*item.Item) error {
 	if !q.CanEnqueue() {
 		return ErrQueueClosed
 	}
@@ -81,13 +83,13 @@ func (q *PersistentGroupedQueue) batchEnqueueNoCommit(items ...*Item) error {
 		}
 	} else {
 		wg.Add(len(items))
-		for _, item := range items {
-			if item == nil {
+		for _, i := range items {
+			if i == nil {
 				q.logger.Error("cannot enqueue nil item")
 				continue
 			}
 
-			go func(i *Item, wg *sync.WaitGroup) {
+			go func(i *item.Item, wg *sync.WaitGroup) {
 				defer wg.Done()
 
 				b, err := encodeItem(i)
@@ -100,7 +102,7 @@ func (q *PersistentGroupedQueue) batchEnqueueNoCommit(items ...*Item) error {
 					bytes: b,
 					item:  i,
 				}
-			}(item, wg)
+			}(i, wg)
 		}
 		wg.Wait()
 	}
@@ -127,7 +129,7 @@ func (q *PersistentGroupedQueue) batchEnqueueNoCommit(items ...*Item) error {
 		return fmt.Errorf("failed to seek to end of file: %s", err.Error())
 	}
 
-	var itemsProcessed = []*Item{}
+	var itemsProcessed = []*item.Item{}
 	if isHandover {
 		itemsDrained, ok := q.handover.tryDrain()
 		if ok {
@@ -178,7 +180,7 @@ func (q *PersistentGroupedQueue) batchEnqueueNoCommit(items ...*Item) error {
 	return nil
 }
 
-func (q *PersistentGroupedQueue) enqueueNoCommit(item *Item) error {
+func (q *PersistentGroupedQueue) enqueueNoCommit(item *item.Item) error {
 	if item == nil {
 		return errors.New("cannot enqueue nil item")
 	}
@@ -226,7 +228,7 @@ func (q *PersistentGroupedQueue) enqueueNoCommit(item *Item) error {
 	return nil
 }
 
-func (q *PersistentGroupedQueue) batchEnqueueUntilCommitted(items ...*Item) error {
+func (q *PersistentGroupedQueue) batchEnqueueUntilCommitted(items ...*item.Item) error {
 	if items == nil {
 		return errors.New("cannot enqueue nil item")
 	}
@@ -292,13 +294,13 @@ func (q *PersistentGroupedQueue) batchEnqueueUntilCommitted(items ...*Item) erro
 		}
 	} else {
 		wg.Add(len(items))
-		for _, item := range items {
-			if item == nil {
+		for _, i := range items {
+			if i == nil {
 				q.logger.Error("cannot enqueue nil item")
 				continue
 			}
 
-			go func(i *Item, wg *sync.WaitGroup) {
+			go func(i *item.Item, wg *sync.WaitGroup) {
 				defer wg.Done()
 
 				b, err := encodeItem(i)
@@ -311,7 +313,7 @@ func (q *PersistentGroupedQueue) batchEnqueueUntilCommitted(items ...*Item) erro
 					bytes: b,
 					item:  i,
 				}
-			}(item, wg)
+			}(i, wg)
 		}
 		wg.Wait()
 	}
@@ -331,7 +333,7 @@ func (q *PersistentGroupedQueue) batchEnqueueUntilCommitted(items ...*Item) erro
 
 	var commit uint64
 	var writtenCount int64
-	var itemsProcessed = []*Item{}
+	var itemsProcessed = []*item.Item{}
 	// <- lock mutex
 	err := func() error {
 		q.mutex.Lock()
@@ -400,7 +402,7 @@ func (q *PersistentGroupedQueue) batchEnqueueUntilCommitted(items ...*Item) erro
 	return nil
 }
 
-func (q *PersistentGroupedQueue) enqueueUntilCommitted(item *Item) error {
+func (q *PersistentGroupedQueue) enqueueUntilCommitted(item *item.Item) error {
 	if item == nil {
 		return errors.New("cannot enqueue nil item")
 	}

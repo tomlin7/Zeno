@@ -4,6 +4,7 @@ import (
 	"net/url"
 	"testing"
 
+	"github.com/internetarchive/Zeno/internal/item"
 	"github.com/internetarchive/Zeno/internal/utils"
 )
 
@@ -55,7 +56,7 @@ func TestNewItem(t *testing.T) {
 				t.Fatalf("Failed to parse parent URL: %v", err)
 			}
 
-			item, err := NewItem(parsedURL, parentURL, tc.itemType, tc.hop, tc.id, tc.bypassSeencheck)
+			item, err := item.New(parsedURL, parentURL, tc.itemType, tc.hop, tc.id, tc.bypassSeencheck)
 			if err != nil {
 				t.Fatalf("Failed to create new item: %v", err)
 			}

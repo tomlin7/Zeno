@@ -6,6 +6,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/internetarchive/Zeno/internal/processer"
 	"github.com/internetarchive/Zeno/internal/stats"
 )
 
@@ -35,9 +36,13 @@ func (crawl *Crawl) finish() {
 	crawl.Log.Warn("[QUEUE] Freezing the dequeue")
 	crawl.Queue.FreezeDequeue()
 
+	crawl.Log.Warn("[PROCESSER] Stopping the processer")
+	processer.Stop()
+
 	crawl.Log.Warn("[WORKERS] Waiting for workers to finish")
-	crawl.Workers.StopSignal <- true
-	crawl.Workers.EnsureFinished()
+	crawl.Workers.Stop <- struct{}{}
+	close(crawl.Workers.Stop)
+	<-crawl.Workers.Done
 	crawl.Log.Warn("[WORKERS] All workers finished")
 
 	// When all workers are finished, we can safely close the HQ related channels

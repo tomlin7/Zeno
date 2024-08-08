@@ -4,6 +4,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/internetarchive/Zeno/internal/item"
 	"github.com/internetarchive/Zeno/internal/stats"
 )
 
@@ -22,7 +23,7 @@ type handoverChannel struct {
 
 type handoverEncodedItem struct {
 	bytes []byte
-	item  *Item
+	item  *item.Item
 }
 
 type activityTracker struct {

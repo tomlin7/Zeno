@@ -1,4 +1,4 @@
-package crawl
+package capture
 
 import (
 	"encoding/json"
@@ -13,258 +13,66 @@ import (
 
 	"github.com/PuerkitoBio/goquery"
 	"github.com/clbanning/mxj/v2"
-	"github.com/internetarchive/Zeno/internal/crawl/sitespecific/cloudflarestream"
-	"github.com/internetarchive/Zeno/internal/crawl/sitespecific/facebook"
-	"github.com/internetarchive/Zeno/internal/crawl/sitespecific/libsyn"
-	"github.com/internetarchive/Zeno/internal/crawl/sitespecific/telegram"
-	"github.com/internetarchive/Zeno/internal/crawl/sitespecific/tiktok"
-	"github.com/internetarchive/Zeno/internal/crawl/sitespecific/truthsocial"
-	"github.com/internetarchive/Zeno/internal/crawl/sitespecific/vk"
+	"github.com/internetarchive/Zeno/internal/capture/sitespecific/cloudflarestream"
+	"github.com/internetarchive/Zeno/internal/capture/sitespecific/facebook"
+	"github.com/internetarchive/Zeno/internal/capture/sitespecific/libsyn"
+	"github.com/internetarchive/Zeno/internal/capture/sitespecific/telegram"
+	"github.com/internetarchive/Zeno/internal/capture/sitespecific/tiktok"
+	"github.com/internetarchive/Zeno/internal/capture/sitespecific/truthsocial"
+	"github.com/internetarchive/Zeno/internal/capture/sitespecific/vk"
+	"github.com/internetarchive/Zeno/internal/item"
 	"github.com/internetarchive/Zeno/internal/queue"
 	"github.com/internetarchive/Zeno/internal/stats"
 	"github.com/internetarchive/Zeno/internal/utils"
 	"github.com/remeh/sizedwaitgroup"
 )
 
-func (c *Crawl) executeGET(item *queue.Item, req *http.Request, isRedirection bool) (resp *http.Response, err error) {
-	var (
-		executionStart = time.Now()
-		newItem        *queue.Item
-		newReq         *http.Request
-		URL            *url.URL
-	)
-
-	defer func() {
-		if c.PrometheusMetrics != nil {
-			c.PrometheusMetrics.DownloadedURI.Inc()
-		}
-
-		stats.IncreaseURIPerSecond(1)
-		if item.Type == "seed" {
-			stats.IncreaseCrawledSeeds(1)
-		} else if item.Type == "asset" {
-			stats.IncreaseCrawledAssets(1)
-		}
-	}()
-
-	// Check if the crawl is paused
-	for c.Paused.Get() {
-		time.Sleep(time.Second)
-	}
-
-	// TODO: re-implement host limitation
-	// Temporarily pause crawls for individual hosts if they are over our configured maximum concurrent requests per domain.
-	// If the request is a redirection, we do not pause the crawl because we want to follow the redirection.
-	// if !isRedirection {
-	// for c.shouldPause(item.Host) {
-	// 	time.Sleep(time.Millisecond * time.Duration(c.RateLimitDelay))
-	// }
-
-	// c.Queue.IncrHostActive(item.Host)
-	// defer c.Frontier.DecrHostActive(item.Host)
-	//}
-
-	// Retry on 429 error
-	for retry := uint8(0); retry < c.MaxRetry; retry++ {
-		// Execute GET request
-		if c.ClientProxied == nil || utils.StringContainsSliceElements(req.URL.Host, c.BypassProxy) {
-			resp, err = c.Client.Do(req)
-			if err != nil {
-				if retry+1 >= c.MaxRetry {
-					return resp, err
-				}
-			}
-		} else {
-			resp, err = c.ClientProxied.Do(req)
-			if err != nil {
-				if retry+1 >= c.MaxRetry {
-					return resp, err
-				}
-			}
-		}
-
-		// This is unused unless there is an error or a 429.
-		sleepTime := time.Second * time.Duration(retry*2) // Retry after 0s, 2s, 4s, ... this could be tweaked in the future to be more customizable.
-
-		if err != nil {
-			if strings.Contains(err.Error(), "unsupported protocol scheme") || strings.Contains(err.Error(), "no such host") {
-				return nil, err
-			}
-
-			c.Log.WithFields(c.genLogFields(err, req.URL, nil)).Error("error while executing GET request, retrying", "retries", retry)
-
-			time.Sleep(sleepTime)
-
-			continue
-		}
-
-		if resp.StatusCode == 429 {
-			c.Log.WithFields(c.genLogFields(err, req.URL, map[string]interface{}{
-				"sleepTime":  sleepTime.String(),
-				"retryCount": retry,
-				"statusCode": resp.StatusCode,
-			})).Info("we are being rate limited")
-
-			// This ensures we aren't leaving the warc dialer hanging.
-			// Do note, 429s are filtered out by WARC writer regardless.
-			io.Copy(io.Discard, resp.Body)
-			resp.Body.Close()
-
-			// If --hq-rate-limiting-send-back is enabled, we send the URL back to HQ
-			if c.UseHQ && c.HQRateLimitingSendBack {
-				return nil, errors.New("URL is being rate limited, sending back to HQ")
-			}
-			c.Log.WithFields(c.genLogFields(err, req.URL, map[string]interface{}{
-				"sleepTime":  sleepTime.String(),
-				"retryCount": retry,
-				"statusCode": resp.StatusCode,
-			})).Warn("URL is being rate limited")
-
-			continue
-		}
-		c.logCrawlSuccess(executionStart, resp.StatusCode, item)
-		break
-	}
-
-	// If a redirection is catched, then we execute the redirection
-	if isStatusCodeRedirect(resp.StatusCode) {
-		if resp.Header.Get("location") == utils.URLToString(req.URL) || item.Redirect >= uint64(c.MaxRedirect) {
-			return resp, nil
-		}
-		defer resp.Body.Close()
-
-		// Needed for WARC writing
-		// IMPORTANT! This will write redirects to WARC!
-		io.Copy(io.Discard, resp.Body)
-
-		URL, err = url.Parse(resp.Header.Get("location"))
-		if err != nil {
-			return resp, err
-		}
-
-		// Make URL absolute if they aren't.
-		// Some redirects don't return full URLs, but rather, relative URLs. We would still like to follow these redirects.
-		if !URL.IsAbs() {
-			URL = req.URL.ResolveReference(URL)
-		}
-
-		// Seencheck the URL
-		if c.UseSeencheck {
-			found := c.seencheckURL(utils.URLToString(URL), "seed")
-			if found {
-				return nil, errors.New("URL from redirection has already been seen")
-			}
-		} else if c.UseHQ {
-			isNewURL, err := c.HQSeencheckURL(URL)
-			if err != nil {
-				return resp, err
-			}
-
-			if !isNewURL {
-				return nil, errors.New("URL from redirection has already been seen")
-			}
-		}
-
-		newItem, err = queue.NewItem(URL, item.URL, item.Type, item.Hop, item.ID, false)
-		if err != nil {
-			return nil, err
-		}
-
-		newItem.Redirect = item.Redirect + 1
-
-		// Prepare GET request
-		newReq, err = http.NewRequest("GET", utils.URLToString(URL), nil)
-		if err != nil {
-			return nil, err
-		}
-
-		// Set new request headers on the new request :(
-		newReq.Header.Set("User-Agent", c.UserAgent)
-		newReq.Header.Set("Referer", utils.URLToString(newItem.ParentURL))
-
-		return c.executeGET(newItem, newReq, true)
-	}
-
-	return resp, nil
-}
-
-func (c *Crawl) captureAsset(item *queue.Item, cookies []*http.Cookie) error {
-	var resp *http.Response
-
-	// Prepare GET request
-	req, err := http.NewRequest("GET", utils.URLToString(item.URL), nil)
-	if err != nil {
-		return err
-	}
-
-	req.Header.Set("Referer", utils.URLToString(item.ParentURL))
-	req.Header.Set("User-Agent", c.UserAgent)
-
-	// Apply cookies obtained from the original URL captured
-	for i := range cookies {
-		req.AddCookie(cookies[i])
-	}
-
-	resp, err = c.executeGET(item, req, false)
-	if err != nil && err.Error() == "URL from redirection has already been seen" {
-		return nil
-	} else if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-
-	// needed for WARC writing
-	io.Copy(io.Discard, resp.Body)
-
-	return nil
-}
-
 // Capture capture the URL and return the outlinks
-func (c *Crawl) Capture(item *queue.Item) error {
+func Capture(itemToCapture *item.Item) error {
 	var (
 		resp      *http.Response
 		waitGroup sync.WaitGroup
 	)
 
-	defer func(i *queue.Item) {
+	defer func(i *item.Item) {
 		waitGroup.Wait()
 
-		if c.UseHQ && i.ID != "" {
-			c.HQFinishedChannel <- i
+		if packageClient.useHQ && i.ID != "" {
+			packageClient.hqFinishedChannel <- i
 		}
-	}(item)
+	}(itemToCapture)
 
 	// Prepare GET request
 	req, err := http.NewRequest("GET", utils.URLToString(item.URL), nil)
 	if err != nil {
-		c.Log.WithFields(c.genLogFields(err, item.URL, nil)).Error("error while preparing GET request")
+		packageClient.logger.Error("error while preparing GET request", "error", err, "url", item.URL)
 		return err
 	}
 
-	if item.Hop > 0 && item.ParentURL != nil {
-		req.Header.Set("Referer", utils.URLToString(item.ParentURL))
+	if itemToCapture.Hop > 0 && itemToCapture.ParentURL != nil {
+		req.Header.Set("Referer", utils.URLToString(itemToCapture.ParentURL))
 	}
 
-	req.Header.Set("User-Agent", c.UserAgent)
+	req.Header.Set("User-Agent", packageClient.userAgent)
 
 	// Execute site-specific code on the request, before sending it
-	if truthsocial.IsTruthSocialURL(utils.URLToString(item.URL)) {
+	if truthsocial.IsTruthSocialURL(utils.URLToString(itemToCapture.URL)) {
 		// Get the API URL from the URL
-		APIURL, err := truthsocial.GenerateAPIURL(utils.URLToString(item.URL))
+		APIURL, err := truthsocial.GenerateAPIURL(utils.URLToString(itemToCapture.URL))
 		if err != nil {
-			c.Log.WithFields(c.genLogFields(err, item.URL, nil)).Error("error while generating API URL")
+			packageClient.logger.Error("error while generating API URL", "error", err, "url", itemToCapture.URL)
 		} else {
 			if APIURL == nil {
-				c.Log.WithFields(c.genLogFields(err, item.URL, nil)).Error("error while generating API URL")
+				packageClient.logger.Error("error while generating API URL", "error", err, "url", itemToCapture.URL)
 			} else {
 				// Then we create an item
-				APIItem, err := queue.NewItem(APIURL, item.URL, item.Type, item.Hop, item.ID, false)
+				APIItem, err := item.New(APIURL, itemToCapture.URL, itemToCapture.Type, itemToCapture.Hop, itemToCapture.ID, false)
 				if err != nil {
-					c.Log.WithFields(c.genLogFields(err, item.URL, nil)).Error("error while creating TruthSocial API item")
+					packageClient.logger.Error("error while creating TruthSocial API item", "error", err, "url", itemToCapture.URL)
 				} else {
-					err = c.Capture(APIItem)
+					err = Capture(APIItem)
 					if err != nil {
-						c.Log.WithFields(c.genLogFields(err, item.URL, nil)).Error("error while capturing TruthSocial API URL")
+						packageClient.logger.Error("error while capturing TruthSocial API URL", "error", err, "url", itemToCapture.URL)
 					}
 				}
 			}
@@ -272,100 +80,101 @@ func (c *Crawl) Capture(item *queue.Item) error {
 			// Grab few embeds that are needed for the playback
 			embedURLs, err := truthsocial.EmbedURLs()
 			if err != nil {
-				c.Log.WithFields(c.genLogFields(err, item.URL, nil)).Error("error while getting TruthSocial embed URLs")
+				packageClient.logger.Error("error while getting TruthSocial embed URLs", "error", err, "url", itemToCapture.URL)
 			} else {
 				for _, embedURL := range embedURLs {
 					// Create the embed item
-					embedItem, err := queue.NewItem(embedURL, item.URL, item.Type, item.Hop, item.ID, false)
+					embedItem, err := item.New(embedURL, itemToCapture.URL, itemToCapture.Type, itemToCapture.Hop, itemToCapture.ID, false)
 					if err != nil {
-						c.Log.WithFields(c.genLogFields(err, item.URL, nil)).Error("error while creating TruthSocial embed item")
+						packageClient.logger.Error("error while creating TruthSocial embed item", "error", err, "url", itemToCapture.URL)
 					} else {
-						err = c.Capture(embedItem)
+						err = Capture(embedItem)
 						if err != nil {
-							c.Log.WithFields(c.genLogFields(err, item.URL, nil)).Error("error while capturing TruthSocial embed URL")
+							packageClient.logger.Error("error while capturing TruthSocial embed URL", "error", err, "url", itemToCapture.URL)
 						}
 					}
 				}
 			}
 		}
-	} else if facebook.IsFacebookPostURL(utils.URLToString(item.URL)) {
+	} else if facebook.IsFacebookPostURL(utils.URLToString(itemToCapture.URL)) {
 		// Generate the embed URL
-		embedURL, err := facebook.GenerateEmbedURL(utils.URLToString(item.URL))
+		embedURL, err := facebook.GenerateEmbedURL(utils.URLToString(itemToCapture.URL))
 		if err != nil {
-			c.Log.WithFields(c.genLogFields(err, item.URL, nil)).Error("error while generating Facebook embed URL")
+			packageClient.logger.Error("error while generating Facebook embed URL", "error", err, "url", itemToCapture.URL)
 		} else {
 			if embedURL == nil {
-				c.Log.WithFields(c.genLogFields(err, item.URL, nil)).Error("error while generating Facebook embed URL")
+				packageClient.logger.Error("error while generating Facebook embed URL", "error", err, "url", itemToCapture.URL)
 			} else {
 				// Create the embed item
-				embedItem, err := queue.NewItem(embedURL, item.URL, item.Type, item.Hop, item.ID, false)
+				embedItem, err := item.New(embedURL, itemToCapture.URL, itemToCapture.Type, itemToCapture.Hop, itemToCapture.ID, false)
 				if err != nil {
-					c.Log.WithFields(c.genLogFields(err, item.URL, nil)).Error("error while creating Facebook embed item")
+					packageClient.logger.Error("error while creating Facebook embed item", "error", err, "url", itemToCapture.URL)
 				} else {
-					err = c.Capture(embedItem)
+					err = Capture(embedItem)
 					if err != nil {
-						c.Log.WithFields(c.genLogFields(err, item.URL, nil)).Error("error while capturing Facebook embed URL")
+						packageClient.logger.Error("error while capturing Facebook embed URL", "error", err, "url", itemToCapture.URL)
 					}
 				}
 			}
 		}
-	} else if libsyn.IsLibsynURL(utils.URLToString(item.URL)) {
+	} else if libsyn.IsLibsynURL(utils.URLToString(itemToCapture.URL)) {
 		// Generate the highwinds URL
-		highwindsURL, err := libsyn.GenerateHighwindsURL(utils.URLToString(item.URL))
+		highwindsURL, err := libsyn.GenerateHighwindsURL(utils.URLToString(itemToCapture.URL))
 		if err != nil {
-			c.Log.WithFields(c.genLogFields(err, item.URL, nil)).Error("error while generating libsyn URL")
+			packageClient.logger.Error("error while generating libsyn URL", "error", err, "url", itemToCapture.URL)
 		} else {
 			if highwindsURL == nil {
-				c.Log.WithFields(c.genLogFields(err, item.URL, nil)).Error("error while generating libsyn URL")
+				packageClient.logger.Error("error while generating libsyn URL", "error", err, "url", itemToCapture.URL)
 			} else {
-				highwindsItem, err := queue.NewItem(highwindsURL, item.URL, item.Type, item.Hop, item.ID, false)
+				highwindsItem, err := item.New(highwindsURL, itemToCapture.URL, itemToCapture.Type, itemToCapture.Hop, itemToCapture.ID, false)
 				if err != nil {
-					c.Log.WithFields(c.genLogFields(err, item.URL, nil)).Error("error while creating libsyn highwinds item")
+					packageClient.logger.Error("error while creating libsyn highwinds item", "error", err, "url", itemToCapture.URL)
 				} else {
-					err = c.Capture(highwindsItem)
+					err = Capture(highwindsItem)
 					if err != nil {
-						c.Log.WithFields(c.genLogFields(err, item.URL, nil)).Error("error while capturing libsyn highwinds URL")
+						packageClient.logger.Error("error while capturing libsyn highwinds URL", "error", err, "url", itemToCapture.URL)
 					}
 				}
 			}
 		}
-	} else if tiktok.IsTikTokURL(utils.URLToString(item.URL)) {
+	} else if tiktok.IsTikTokURL(utils.URLToString(itemToCapture.URL)) {
 		tiktok.AddHeaders(req)
-	} else if telegram.IsTelegramURL(utils.URLToString(item.URL)) && !telegram.IsTelegramEmbedURL(utils.URLToString(item.URL)) {
+	} else if telegram.IsTelegramURL(utils.URLToString(itemToCapture.URL)) && !telegram.IsTelegramEmbedURL(utils.URLToString(itemToCapture.URL)) {
 		// If the URL is a Telegram URL, we make an embed URL out of it
-		telegram.TransformURL(item.URL)
+		telegram.TransformURL(itemToCapture.URL)
 
 		// Then we create an item
-		embedItem, err := queue.NewItem(item.URL, item.URL, item.Type, item.Hop, item.ID, false)
+		embedItem, err := item.New(itemToCapture.URL, itemToCapture.URL, itemToCapture.Type, itemToCapture.Hop, itemToCapture.ID, false)
 		if err != nil {
-			c.Log.WithFields(c.genLogFields(err, item.URL, nil)).Error("error while creating Telegram embed item")
+			packageClient.logger.Error("error while creating Telegram embed item", "error", err, "url", itemToCapture.URL)
 		} else {
 			// And capture it
-			err = c.Capture(embedItem)
+			err = Capture(embedItem)
 			if err != nil {
-				c.Log.WithFields(c.genLogFields(err, item.URL, nil)).Error("error while capturing Telegram embed URL")
+				// c.Log.WithFields(c.genLogFields(err, item.URL, nil)).Error("error while capturing Telegram embed URL")
+				packageClient.logger.Error("error while capturing Telegram embed URL", "error", err, "url", itemToCapture.URL)
 			}
 		}
-	} else if vk.IsVKURL(utils.URLToString(item.URL)) {
+	} else if vk.IsVKURL(utils.URLToString(itemToCapture.URL)) {
 		vk.AddHeaders(req)
 	}
 
 	// Execute request
-	resp, err = c.executeGET(item, req, false)
+	resp, err = executeGET(itemToCapture, req, false)
 	if err != nil && err.Error() == "URL from redirection has already been seen" {
 		return err
 	} else if err != nil && err.Error() == "URL is being rate limited, sending back to HQ" {
-		newItem, err := queue.NewItem(item.URL, item.ParentURL, item.Type, item.Hop, "", true)
+		newItem, err := item.New(itemToCapture.URL, itemToCapture.ParentURL, itemToCapture.Type, itemToCapture.Hop, "", true)
 		if err != nil {
-			c.Log.WithFields(c.genLogFields(err, item.URL, nil)).Error("error while creating new item")
+			packageClient.logger.Error("error while creating new item", "error", err, "url", itemToCapture.URL)
 			return err
 		}
 
-		c.HQProducerChannel <- newItem
-		c.Log.WithFields(c.genLogFields(err, item.URL, nil)).Error("URL is being rate limited, sending back to HQ")
+		packageClient.hqProducerChannel <- newItem
+		packageClient.logger.Info("URL is being rate limited, sending back to HQ", "error", err, "url", itemToCapture.URL)
 		return err
 	} else if err != nil {
-		c.Log.WithFields(c.genLogFields(err, item.URL, nil)).Error("error while executing GET request")
+		packageClient.logger.Error("error while executing GET request", "error", err, "url", itemToCapture.URL)
 		return err
 	}
 	defer resp.Body.Close()
@@ -619,7 +428,7 @@ func (c *Crawl) Capture(item *queue.Item) error {
 			defer swg.Done()
 
 			// Create the asset's item
-			newAsset, err := queue.NewItem(asset, item.URL, "asset", item.Hop, "", false)
+			newAsset, err := item.New(asset, item.URL, "asset", item.Hop, "", false)
 			if err != nil {
 				c.Log.WithFields(c.genLogFields(err, asset, map[string]interface{}{
 					"parentHop": item.Hop,
@@ -648,6 +457,199 @@ func (c *Crawl) Capture(item *queue.Item) error {
 
 	swg.Wait()
 	return err
+}
+
+func executeGET(item *queue.Item, req *http.Request, isRedirection bool) (resp *http.Response, err error) {
+	var (
+		executionStart = time.Now()
+		newItem        *queue.Item
+		newReq         *http.Request
+		URL            *url.URL
+	)
+
+	defer func() {
+		if c.PrometheusMetrics != nil {
+			c.PrometheusMetrics.DownloadedURI.Inc()
+		}
+
+		stats.IncreaseURIPerSecond(1)
+		if item.Type == "seed" {
+			stats.IncreaseCrawledSeeds(1)
+		} else if item.Type == "asset" {
+			stats.IncreaseCrawledAssets(1)
+		}
+	}()
+
+	// Check if the crawl is paused
+	for c.Paused.Get() {
+		time.Sleep(time.Second)
+	}
+
+	// TODO: re-implement host limitation
+	// Temporarily pause crawls for individual hosts if they are over our configured maximum concurrent requests per domain.
+	// If the request is a redirection, we do not pause the crawl because we want to follow the redirection.
+	// if !isRedirection {
+	// for c.shouldPause(item.Host) {
+	// 	time.Sleep(time.Millisecond * time.Duration(c.RateLimitDelay))
+	// }
+
+	// c.Queue.IncrHostActive(item.Host)
+	// defer c.Frontier.DecrHostActive(item.Host)
+	//}
+
+	// Retry on 429 error
+	for retry := uint8(0); retry < c.MaxRetry; retry++ {
+		// Execute GET request
+		if c.ClientProxied == nil || utils.StringContainsSliceElements(req.URL.Host, c.BypassProxy) {
+			resp, err = c.Client.Do(req)
+			if err != nil {
+				if retry+1 >= c.MaxRetry {
+					return resp, err
+				}
+			}
+		} else {
+			resp, err = c.ClientProxied.Do(req)
+			if err != nil {
+				if retry+1 >= c.MaxRetry {
+					return resp, err
+				}
+			}
+		}
+
+		// This is unused unless there is an error or a 429.
+		sleepTime := time.Second * time.Duration(retry*2) // Retry after 0s, 2s, 4s, ... this could be tweaked in the future to be more customizable.
+
+		if err != nil {
+			if strings.Contains(err.Error(), "unsupported protocol scheme") || strings.Contains(err.Error(), "no such host") {
+				return nil, err
+			}
+
+			c.Log.WithFields(c.genLogFields(err, req.URL, nil)).Error("error while executing GET request, retrying", "retries", retry)
+
+			time.Sleep(sleepTime)
+
+			continue
+		}
+
+		if resp.StatusCode == 429 {
+			c.Log.WithFields(c.genLogFields(err, req.URL, map[string]interface{}{
+				"sleepTime":  sleepTime.String(),
+				"retryCount": retry,
+				"statusCode": resp.StatusCode,
+			})).Info("we are being rate limited")
+
+			// This ensures we aren't leaving the warc dialer hanging.
+			// Do note, 429s are filtered out by WARC writer regardless.
+			io.Copy(io.Discard, resp.Body)
+			resp.Body.Close()
+
+			// If --hq-rate-limiting-send-back is enabled, we send the URL back to HQ
+			if c.UseHQ && c.HQRateLimitingSendBack {
+				return nil, errors.New("URL is being rate limited, sending back to HQ")
+			}
+			c.Log.WithFields(c.genLogFields(err, req.URL, map[string]interface{}{
+				"sleepTime":  sleepTime.String(),
+				"retryCount": retry,
+				"statusCode": resp.StatusCode,
+			})).Warn("URL is being rate limited")
+
+			continue
+		}
+		c.logCrawlSuccess(executionStart, resp.StatusCode, item)
+		break
+	}
+
+	// If a redirection is catched, then we execute the redirection
+	if isStatusCodeRedirect(resp.StatusCode) {
+		if resp.Header.Get("location") == utils.URLToString(req.URL) || item.Redirect >= uint64(c.MaxRedirect) {
+			return resp, nil
+		}
+		defer resp.Body.Close()
+
+		// Needed for WARC writing
+		// IMPORTANT! This will write redirects to WARC!
+		io.Copy(io.Discard, resp.Body)
+
+		URL, err = url.Parse(resp.Header.Get("location"))
+		if err != nil {
+			return resp, err
+		}
+
+		// Make URL absolute if they aren't.
+		// Some redirects don't return full URLs, but rather, relative URLs. We would still like to follow these redirects.
+		if !URL.IsAbs() {
+			URL = req.URL.ResolveReference(URL)
+		}
+
+		// Seencheck the URL
+		if c.UseSeencheck {
+			found := c.seencheckURL(utils.URLToString(URL), "seed")
+			if found {
+				return nil, errors.New("URL from redirection has already been seen")
+			}
+		} else if c.UseHQ {
+			isNewURL, err := c.HQSeencheckURL(URL)
+			if err != nil {
+				return resp, err
+			}
+
+			if !isNewURL {
+				return nil, errors.New("URL from redirection has already been seen")
+			}
+		}
+
+		newItem, err = item.New(URL, item.URL, item.Type, item.Hop, item.ID, false)
+		if err != nil {
+			return nil, err
+		}
+
+		newItem.Redirect = item.Redirect + 1
+
+		// Prepare GET request
+		newReq, err = http.NewRequest("GET", utils.URLToString(URL), nil)
+		if err != nil {
+			return nil, err
+		}
+
+		// Set new request headers on the new request :(
+		newReq.Header.Set("User-Agent", c.UserAgent)
+		newReq.Header.Set("Referer", utils.URLToString(newItem.ParentURL))
+
+		return c.executeGET(newItem, newReq, true)
+	}
+
+	return resp, nil
+}
+
+func captureAsset(item *queue.Item, cookies []*http.Cookie) error {
+	var resp *http.Response
+
+	// Prepare GET request
+	req, err := http.NewRequest("GET", utils.URLToString(item.URL), nil)
+	if err != nil {
+		return err
+	}
+
+	req.Header.Set("Referer", utils.URLToString(item.ParentURL))
+	req.Header.Set("User-Agent", c.UserAgent)
+
+	// Apply cookies obtained from the original URL captured
+	for i := range cookies {
+		req.AddCookie(cookies[i])
+	}
+
+	resp, err = c.executeGET(item, req, false)
+	if err != nil && err.Error() == "URL from redirection has already been seen" {
+		return nil
+	} else if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	// needed for WARC writing
+	io.Copy(io.Discard, resp.Body)
+
+	return nil
 }
 
 func getURLsFromJSON(jsonString string) ([]string, error) {

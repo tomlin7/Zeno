@@ -5,11 +5,12 @@ import (
 	"fmt"
 	"net/url"
 
+	"github.com/internetarchive/Zeno/internal/item"
 	protobufv1 "github.com/internetarchive/Zeno/internal/queue/protobuf/v1"
 	"google.golang.org/protobuf/proto"
 )
 
-func encodeItem(item *Item) ([]byte, error) {
+func encodeItem(item *item.Item) ([]byte, error) {
 	urlJSON, err := json.Marshal(item.URL)
 	if err != nil {
 		return nil, err
@@ -35,7 +36,7 @@ func encodeItem(item *Item) ([]byte, error) {
 	return proto.Marshal(protoItem)
 }
 
-func decodeProtoItem(itemBytes []byte) (*Item, error) {
+func decodeProtoItem(itemBytes []byte) (*item.Item, error) {
 	protoItem := &protobufv1.ProtoItem{}
 	err := proto.Unmarshal(itemBytes, protoItem)
 	if err != nil {
@@ -54,7 +55,7 @@ func decodeProtoItem(itemBytes []byte) (*Item, error) {
 		return nil, fmt.Errorf("failed to unmarshal URL: %w", err)
 	}
 
-	return &Item{
+	return &item.Item{
 		URL:             &URL,
 		ParentURL:       &parentURL,
 		Hop:             protoItem.GetHop(),

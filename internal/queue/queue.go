@@ -4,12 +4,12 @@ import (
 	"encoding/gob"
 	"errors"
 	"fmt"
-	"net/url"
 	"os"
 	"path"
 	"sync"
 	"sync/atomic"
 
+	"github.com/internetarchive/Zeno/internal/item"
 	"github.com/internetarchive/Zeno/internal/log"
 	"github.com/internetarchive/Zeno/internal/queue/index"
 	"github.com/internetarchive/Zeno/internal/stats"
@@ -38,23 +38,11 @@ type PersistentGroupedQueue struct {
 	handoverCount *atomic.Uint64
 
 	useCommit      bool
-	enqueueOp      func(*Item) error
-	batchEnqueueOp func(...*Item) error
-	dequeueOp      func() (*Item, error)
+	enqueueOp      func(*item.Item) error
+	batchEnqueueOp func(...*item.Item) error
+	dequeueOp      func() (*item.Item, error)
 
 	logger *log.Logger
-}
-
-type Item struct {
-	URL             *url.URL
-	ParentURL       *url.URL
-	Hop             uint64
-	Type            string
-	ID              string
-	BypassSeencheck bool
-	Hash            uint64
-	LocallyCrawled  uint64
-	Redirect        uint64
 }
 
 func NewPersistentGroupedQueue(queueDirPath string, useHandover bool, useCommit bool) (*PersistentGroupedQueue, error) {

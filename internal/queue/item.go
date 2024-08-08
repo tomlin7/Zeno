@@ -4,36 +4,15 @@ import (
 	"bufio"
 	"errors"
 	"fmt"
-	"hash/fnv"
 	"io"
 	"net/url"
 	"os"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/gosuri/uilive"
-	"github.com/internetarchive/Zeno/internal/utils"
+	"github.com/internetarchive/Zeno/internal/item"
 	"github.com/sirupsen/logrus"
 )
-
-func NewItem(URL *url.URL, parentURL *url.URL, itemType string, hop uint64, ID string, bypassSeencheck bool) (*Item, error) {
-	h := fnv.New64a()
-	h.Write([]byte(utils.URLToString(URL)))
-
-	if ID == "" {
-		ID = uuid.New().String()
-	}
-
-	return &Item{
-		URL:             URL,
-		ParentURL:       parentURL,
-		Hop:             hop,
-		Type:            itemType,
-		ID:              ID,
-		Hash:            h.Sum64(),
-		BypassSeencheck: bypassSeencheck,
-	}, nil
-}
 
 func (q *PersistentGroupedQueue) ReadItemAt(position uint64, itemSize uint64) ([]byte, error) {
 	// Ensure the file pointer is at the correct position
@@ -52,7 +31,7 @@ func (q *PersistentGroupedQueue) ReadItemAt(position uint64, itemSize uint64) ([
 	return itemBytes, nil
 }
 
-func FileToItems(path string) (seeds []Item, err error) {
+func FileToItems(path string) (seeds []item.Item, err error) {
 	var totalCount, validCount int
 
 	writer := uilive.New()
@@ -94,7 +73,7 @@ func FileToItems(path string) (seeds []Item, err error) {
 			continue
 		}
 
-		item, err := NewItem(URL, nil, "seed", 0, "", false)
+		item, err := item.New(URL, nil, "seed", 0, "", false)
 		if err != nil {
 			logrus.WithFields(logrus.Fields{
 				"url": scanner.Text(),

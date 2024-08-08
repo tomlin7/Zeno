@@ -61,13 +61,13 @@ func (c *Crawl) queueOutlinks(outlinks []*url.URL, item *queue.Item, wg *sync.Wa
 	var excluded bool
 
 	// Send the outlinks to the pool of workers
-	var items = make([]*queue.Item, 0, len(outlinks))
+	var items = make([]*item.Item, 0, len(outlinks))
 	for _, outlink := range outlinks {
 		outlink := outlink
 
 		// If the host of the outlink is in the host exclusion list, or the host is not in the host inclusion list
 		// if one is specified, we ignore the outlink
-		if utils.StringInSlice(outlink.Host, c.ExcludedHosts) || !c.checkIncludedHosts(outlink.Host) {
+		if utils.StringInSlice(outlink.Host, c.ExcludedHosts) || !c.CheckIncludedHosts(outlink.Host) {
 			continue
 		}
 

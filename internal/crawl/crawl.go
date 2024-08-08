@@ -7,7 +7,9 @@ import (
 	"time"
 
 	"git.archive.org/wb/gocrawlhq"
-	"github.com/CorentinB/warc"
+	"github.com/internetarchive/Zeno/internal/capture"
+	"github.com/internetarchive/Zeno/internal/item"
+	"github.com/internetarchive/Zeno/internal/processer"
 	"github.com/internetarchive/Zeno/internal/queue"
 	"github.com/internetarchive/Zeno/internal/seencheck"
 	"github.com/internetarchive/Zeno/internal/stats"
@@ -83,72 +85,10 @@ func (c *Crawl) Start() (err error) {
 	// have enough free space, and potentially pause the crawl if it doesn't
 	go c.handleCrawlPause()
 
-	// Initialize WARC writer
-	c.Log.Info("Initializing WARC writer..")
-
-	// Init WARC rotator settings
-	rotatorSettings := c.initWARCRotatorSettings()
-
-	dedupeOptions := warc.DedupeOptions{LocalDedupe: !c.DisableLocalDedupe, SizeThreshold: c.WARCDedupSize}
-	if c.CDXDedupeServer != "" {
-		dedupeOptions = warc.DedupeOptions{LocalDedupe: !c.DisableLocalDedupe, CDXDedupe: true, CDXURL: c.CDXDedupeServer, CDXCookie: c.WARCCustomCookie, SizeThreshold: c.WARCDedupSize}
-	}
-
-	// Init the HTTP client responsible for recording HTTP(s) requests / responses
-	HTTPClientSettings := warc.HTTPClientSettings{
-		RotatorSettings:     rotatorSettings,
-		DedupeOptions:       dedupeOptions,
-		DecompressBody:      true,
-		SkipHTTPStatusCodes: []int{429},
-		VerifyCerts:         c.CertValidation,
-		TempDir:             c.WARCTempDir,
-		FullOnDisk:          c.WARCFullOnDisk,
-		RandomLocalIP:       c.RandomLocalIP,
-	}
-
-	c.Client, err = warc.NewWARCWritingHTTPClient(HTTPClientSettings)
-	if err != nil {
-		c.Log.Fatal("Unable to init WARC writing HTTP client", "error", err)
-	}
-
-	go func() {
-		for err := range c.Client.ErrChan {
-			c.Log.WithFields(c.genLogFields(err, nil, nil)).Error("WARC HTTP client error")
-		}
-	}()
-
-	c.Client.Timeout = time.Duration(c.HTTPTimeout) * time.Second
-	c.Log.Info("HTTP client timeout set", "timeout", c.HTTPTimeout)
-
-	if c.Proxy != "" {
-		proxyHTTPClientSettings := HTTPClientSettings
-		proxyHTTPClientSettings.Proxy = c.Proxy
-
-		c.ClientProxied, err = warc.NewWARCWritingHTTPClient(proxyHTTPClientSettings)
-		if err != nil {
-			c.Log.Fatal("unable to init WARC writing (proxy) HTTP client")
-		}
-
-		go func() {
-			for err := range c.ClientProxied.ErrChan {
-				c.Log.WithFields(c.genLogFields(err, nil, nil)).Error("WARC HTTP client error")
-			}
-		}()
-	}
-
-	// Launch the monitorWARCWaitGroup goroutine
-	go c.monitorWARCWaitGroup()
-
-	c.Log.Info("WARC writer initialized")
-
 	// TODO: re-implement host limitation
 	// Process responsible for slowing or pausing the crawl
 	// when the WARC writing queue gets too big
 	// go c.crawlSpeedLimiter()
-
-	if c.API {
-		go c.startAPI()
-	}
 
 	// Parse input cookie file if specified
 	if c.CookieFile != "" {
@@ -160,10 +100,6 @@ func (c *Crawl) Start() (err error) {
 		c.Client.Jar = cookieJar
 	}
 
-	// Start the workers pool by building all the workers and starting them
-	// Also starts all the background processes that will handle the workers
-	c.Workers.Start()
-
 	// If crawl HQ parameters are specified, then we start the background
 	// processes responsible for pulling and pushing seeds from and to HQ
 	if c.UseHQ {
@@ -172,8 +108,8 @@ func (c *Crawl) Start() (err error) {
 			c.Log.Fatal("unable to init crawl HQ client", "error", err)
 		}
 
-		c.HQProducerChannel = make(chan *queue.Item, c.Workers.Count)
-		c.HQFinishedChannel = make(chan *queue.Item, c.Workers.Count)
+		c.HQProducerChannel = make(chan *item.Item, c.Workers.Count)
+		c.HQFinishedChannel = make(chan *item.Item, c.Workers.Count)
 
 		c.HQChannelsWg.Add(2)
 		go c.HQConsumer()
@@ -183,7 +119,7 @@ func (c *Crawl) Start() (err error) {
 	} else {
 		// Push the seed list to the queue
 		c.Log.Info("Pushing seeds in the local queue..")
-		var seedPointers []*queue.Item
+		var seedPointers []*item.Item
 		for idx, item := range c.SeedList {
 			seedPointers = append(seedPointers, &item)
 
@@ -207,6 +143,44 @@ func (c *Crawl) Start() (err error) {
 		c.Log.Info("All seeds are now in queue")
 	}
 
+	// Initialize WARC writer
+	c.Log.Info("Initializing WARC writer in capture..")
+	capture.Init(&capture.Config{
+		WARCPrefix:         c.WARCPrefix,
+		WARCPoolSize:       c.WARCPoolSize,
+		WARCTempDir:        c.WARCTempDir,
+		WARCFullOnDisk:     c.WARCFullOnDisk,
+		WARCDedupSize:      c.WARCDedupSize,
+		DisableLocalDedupe: c.DisableLocalDedupe,
+		CDXDedupeServer:    c.CDXDedupeServer,
+		WARCCustomCookie:   c.WARCCustomCookie,
+		CertValidation:     c.CertValidation,
+		WARCOperator:       c.WARCOperator,
+		JobPath:            c.JobPath,
+		HTTPTimeout:        c.HTTPTimeout,
+		UserAgent:          c.UserAgent,
+		Proxy:              c.Proxy,
+		RandomLocalIP:      c.RandomLocalIP,
+		ParentLogger:       c.Log,
+		UseHQ:              c.UseHQ,
+		HQFinishedChannel:  c.HQFinishedChannel,
+		HQProducerChannel:  c.HQProducerChannel,
+	})
+	c.Log.Info("WARC writer initialized")
+
+	if c.API {
+		go c.startAPI()
+	}
+
+	// Start the workers pool by building all the workers and starting them
+	// Also starts all the background processes that will handle the workers
+	c.Workers.Start()
+
+	// Start the processer
+	// The processer is responsible for dequeueing items, processing them (excluding etc) and sending them to the workers
+	processer.Init(c.Workers, c.Queue)
+
+	// Set the crawl state to running
 	stats.SetCrawlState("running")
 
 	// Start the background process that will catch when there
