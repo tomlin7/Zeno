@@ -8,7 +8,6 @@ import (
 	"sync"
 	"time"
 
-	"git.archive.org/wb/gocrawlhq"
 	"github.com/CorentinB/warc"
 	"github.com/google/uuid"
 	"github.com/internetarchive/Zeno/internal/config"
@@ -101,15 +100,15 @@ type Crawl struct {
 	WARCCustomCookie   string
 
 	// Crawl HQ settings
-	UseHQ                  bool
-	HQAddress              string
-	HQProject              string
-	HQKey                  string
-	HQSecret               string
-	HQStrategy             string
-	HQBatchSize            int
-	HQContinuousPull       bool
-	HQClient               *gocrawlhq.Client
+	UseHQ            bool
+	HQAddress        string
+	HQProject        string
+	HQKey            string
+	HQSecret         string
+	HQStrategy       string
+	HQBatchSize      int
+	HQContinuousPull bool
+	// HQClient               *gocrawlhq.Client // Moved to hq package
 	HQFinishedChannel      chan *item.Item
 	HQProducerChannel      chan *item.Item
 	HQChannelsWg           *sync.WaitGroup

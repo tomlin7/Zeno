@@ -1,4 +1,4 @@
-package crawl
+package hq
 
 import (
 	"math"
@@ -8,17 +8,98 @@ import (
 	"time"
 
 	"git.archive.org/wb/gocrawlhq"
+	"github.com/internetarchive/Zeno/internal/item"
+	"github.com/internetarchive/Zeno/internal/log"
 	"github.com/internetarchive/Zeno/internal/queue"
 	"github.com/internetarchive/Zeno/internal/stats"
 	"github.com/internetarchive/Zeno/internal/utils"
 	"github.com/sirupsen/logrus"
 )
 
-// This function connects to HQ's websocket and listen for messages.
+type operator struct {
+	hqClient          *gocrawlhq.Client
+	hqProducerChannel chan *item.Item
+	hqFinishedChannel chan *item.Item
+	hqProject         string
+	job               string
+
+	// Routines
+	stopConsumer  chan struct{}
+	doneConsumer  chan struct{}
+	stopProducer  chan struct{}
+	doneProducer  chan struct{}
+	stopFinisher  chan struct{}
+	doneFinisher  chan struct{}
+	stopWebsocket chan struct{}
+	doneWebsocket chan struct{}
+}
+
+type Config struct {
+	HQClient          *gocrawlhq.Client
+	HQProducerChannel chan *item.Item
+	HQFinishedChannel chan *item.Item
+	HQProject         string
+	Job               string
+
+	Logger *log.Logger
+}
+
+var (
+	isInit          = false
+	packageOperator *operator
+	HQChannelsWg    sync.WaitGroup
+)
+
+// Init initializes the hq package
+func Init(config *Config) {
+	newOperator := &operator{
+		hqClient:          config.HQClient,
+		hqProducerChannel: config.HQProducerChannel,
+		hqFinishedChannel: config.HQFinishedChannel,
+		hqProject:         config.HQProject,
+		job:               config.Job,
+		stopConsumer:      make(chan struct{}),
+		doneConsumer:      make(chan struct{}),
+		stopProducer:      make(chan struct{}),
+		doneProducer:      make(chan struct{}),
+		stopFinisher:      make(chan struct{}),
+		doneFinisher:      make(chan struct{}),
+		stopWebsocket:     make(chan struct{}),
+		doneWebsocket:     make(chan struct{}),
+	}
+
+	if !isInit {
+		isInit = true
+		packageOperator = newOperator
+	}
+}
+
+func Stop() {
+	if !isInit {
+		return
+	}
+
+	packageOperator.stopConsumer <- struct{}{}
+	packageOperator.stopProducer <- struct{}{}
+	packageOperator.stopFinisher <- struct{}{}
+	packageOperator.stopWebsocket <- struct{}{}
+
+	<-packageOperator.doneConsumer
+	<-packageOperator.doneProducer
+	<-packageOperator.doneFinisher
+	<-packageOperator.doneWebsocket
+
+	close(packageOperator.doneConsumer)
+	close(packageOperator.doneProducer)
+	close(packageOperator.doneFinisher)
+	close(packageOperator.doneWebsocket)
+}
+
+// Websocket connects to HQ's websocket and listen for messages.
 // It also sends and "identify" message to the HQ to let it know that
 // Zeno is connected. This "identify" message is sent every second and
 // contains the crawler's stats and details.
-func (c *Crawl) HQWebsocket() {
+func Websocket() {
 	var (
 		// the "identify" message will be sent every second
 		// to the crawl HQ
@@ -31,35 +112,42 @@ func (c *Crawl) HQWebsocket() {
 
 	// send an "identify" message to the crawl HQ every second
 	for {
-		err := c.HQClient.Identify(&gocrawlhq.IdentifyMessage{
-			Project:   c.HQProject,
-			Job:       c.Job,
-			IP:        utils.GetOutboundIP().String(),
-			Hostname:  utils.GetHostname(),
-			GoVersion: utils.GetVersion().GoVersion,
-		})
-		if err != nil {
-			c.Log.WithFields(c.genLogFields(err, nil, map[string]interface{}{})).Error("error sending identify payload to crawl HQ, trying to reconnect..")
-
-			err = c.HQClient.InitWebsocketConn()
+		select {
+		case <-packageOperator.stopWebsocket:
+			close(packageOperator.stopWebsocket)
+			packageOperator.doneWebsocket <- struct{}{}
+			return
+		case<-identifyTicker.C:
+			err := c.HQClient.Identify(&gocrawlhq.IdentifyMessage{
+				Project:   c.HQProject,
+				Job:       c.Job,
+				IP:        utils.GetOutboundIP().String(),
+				Hostname:  utils.GetHostname(),
+				GoVersion: utils.GetVersion().GoVersion,
+			})
 			if err != nil {
-				c.Log.WithFields(c.genLogFields(err, nil, map[string]interface{}{})).Error("error initializing websocket connection to crawl HQ")
-			}
-		}
+				c.Log.WithFields(c.genLogFields(err, nil, map[string]interface{}{})).Error("error sending identify payload to crawl HQ, trying to reconnect..")
 
-		<-identifyTicker.C
+				err = c.HQClient.InitWebsocketConn()
+				if err != nil {
+					c.Log.WithFields(c.genLogFields(err, nil, map[string]interface{}{})).Error("error initializing websocket connection to crawl HQ")
+				}
+			}
+	}
+
 	}
 }
 
 // HQProducer send items to HQ
 // Use channel HQProducerChannel to send items to HQ
-func (c *Crawl) HQProducer() {
+func HQProducer() {
 	defer c.HQChannelsWg.Done()
 
 	var (
 		discoveredArray   = []gocrawlhq.URL{}
 		mutex             = sync.Mutex{}
-		terminateProducer = make(chan bool)
+		terminateProducer = make(chan struct{})
+		doneProducer      = make(chan struct{})
 	)
 
 	// the discoveredArray is sent to the crawl HQ every 10 seconds
@@ -83,7 +171,8 @@ func (c *Crawl) HQProducer() {
 						break
 					}
 				}
-
+				close(terminateProducer)
+				doneProducer <- struct{}{}
 				return
 			default:
 				mutex.Lock()
@@ -107,7 +196,12 @@ func (c *Crawl) HQProducer() {
 	}()
 
 	// listen to the discovered channel and add the URLs to the discoveredArray
-	for discoveredItem := range c.HQProducerChannel {
+	for {
+		select {
+		case <-packageOperator.stopProducer:
+
+		}
+	discoveredItem := range c.HQProducerChannel 
 		var via string
 
 		if discoveredItem.ParentURL != nil {
@@ -151,7 +245,7 @@ func (c *Crawl) HQProducer() {
 }
 
 // HQConsumer fetch URLs from HQ
-func (c *Crawl) HQConsumer() {
+func HQConsumer() {
 	for {
 		// This is on purpose evaluated every time,
 		// because the value of workers will maybe change
@@ -226,7 +320,7 @@ func (c *Crawl) HQConsumer() {
 }
 
 // HQFinisher send finished URLs to HQ to mark them as finished
-func (c *Crawl) HQFinisher() {
+func HQFinisher() {
 	defer c.HQChannelsWg.Done()
 
 	var (
@@ -277,7 +371,7 @@ func (c *Crawl) HQFinisher() {
 	}
 }
 
-func (c *Crawl) HQSeencheckURLs(URLs []*url.URL) (seencheckedBatch []*url.URL, err error) {
+func HQSeencheckURLs(URLs []*url.URL) (seencheckedBatch []*url.URL, err error) {
 	var (
 		discoveredURLs []gocrawlhq.URL
 	)
@@ -315,7 +409,7 @@ func (c *Crawl) HQSeencheckURLs(URLs []*url.URL) (seencheckedBatch []*url.URL, e
 	return seencheckedBatch, nil
 }
 
-func (c *Crawl) HQSeencheckURL(URL *url.URL) (bool, error) {
+func HQSeencheckURL(URL *url.URL) (bool, error) {
 	discoveredURL := gocrawlhq.URL{
 		Value: utils.URLToString(URL),
 	}

@@ -277,22 +277,16 @@ func Capture(itemToCapture *item.Item) error {
 			for _, cfstreamURL := range cfstreamURLs {
 				packageClient.seencheckURL(cfstreamURL, "asset")
 			}
-		} else if c.UseHQ {
+		} else if packageClient.useHQ {
 			_, err := c.HQSeencheckURLs(utils.StringSliceToURLSlice(cfstreamURLs))
 			if err != nil {
-				c.Log.WithFields(c.genLogFields(err, item.URL, map[string]interface{}{
-					"urls": cfstreamURLs,
-				})).Error("error while seenchecking assets via HQ")
+				packageClient.logger.Error("error while seenchecking Cloudflarestream assets via HQ", "error", err, "url", itemToCapture.URL)
 			}
 		}
 
 		// Log the archived URLs
 		for _, cfstreamURL := range cfstreamURLs {
-			c.Log.WithFields(c.genLogFields(err, cfstreamURL, map[string]interface{}{
-				"parentHop": item.Hop,
-				"parentUrl": utils.URLToString(item.URL),
-				"type":      "asset",
-			})).Info("URL archived")
+			packageClient.logger.Info("URL archived", "url", cfstreamURL, "parentHop", itemToCapture.Hop, "parentURL", itemToCapture.URL)
 		}
 	}
 
