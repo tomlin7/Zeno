@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"git.archive.org/wb/gocrawlhq"
+	"github.com/internetarchive/Zeno/internal/api"
 	"github.com/internetarchive/Zeno/internal/capture"
 	"github.com/internetarchive/Zeno/internal/hq"
 	"github.com/internetarchive/Zeno/internal/item"
@@ -15,16 +16,8 @@ import (
 	"github.com/internetarchive/Zeno/internal/seencheck"
 	"github.com/internetarchive/Zeno/internal/stats"
 	"github.com/internetarchive/Zeno/internal/utils"
-	"github.com/prometheus/client_golang/prometheus"
 	"github.com/telanflow/cookiejar"
-	"mvdan.cc/xurls/v2"
 )
-
-// PrometheusMetrics define all the metrics exposed by the Prometheus exporter
-type PrometheusMetrics struct {
-	Prefix        string
-	DownloadedURI prometheus.Counter
-}
 
 // Start fire up the crawling process
 func (c *Crawl) Start() (err error) {
@@ -32,7 +25,6 @@ func (c *Crawl) Start() (err error) {
 	c.Paused = new(utils.TAtomBool)
 	c.Finished = new(utils.TAtomBool)
 	c.HQChannelsWg = new(sync.WaitGroup)
-	regexOutlinks = xurls.Relaxed()
 
 	// Init the stats package
 	// If LiveStats enabled : launch the reoutine responsible for printing live stats on the standard output
@@ -183,7 +175,17 @@ func (c *Crawl) Start() (err error) {
 	c.Log.Info("WARC writer initialized")
 
 	if c.API {
-		go c.startAPI()
+		c.PromIncreaser = make(chan struct{}, 10)
+		api.Init(&api.Config{
+			Job:              c.Job,
+			APIPort:          c.APIPort,
+			Prometheus:       c.Prometheus,
+			PrometheusPrefix: c.PrometheusPrefix,
+			StartTime:        c.StartTime,
+			WorkerPool:       c.Workers,
+			PromIncreaser:    c.PromIncreaser,
+			Logger:           c.Log,
+		})
 	}
 
 	// Start the workers pool by building all the workers and starting them
@@ -200,6 +202,49 @@ func (c *Crawl) Start() (err error) {
 		UseHQ:        c.UseHQ,
 		HQProducer:   c.HQProducerChannel,
 	})
+
+	captureConfig := &capture.Config{
+		WARCPrefix:            c.WARCPrefix,
+		WARCPoolSize:          c.WARCPoolSize,
+		WARCTempDir:           c.WARCTempDir,
+		WARCFullOnDisk:        c.WARCFullOnDisk,
+		WARCDedupSize:         c.WARCDedupSize,
+		DisableLocalDedupe:    c.DisableLocalDedupe,
+		CDXDedupeServer:       c.CDXDedupeServer,
+		WARCCustomCookie:      c.WARCCustomCookie,
+		CertValidation:        c.CertValidation,
+		WARCOperator:          c.WARCOperator,
+		JobPath:               c.JobPath,
+		DisableAssetsCapture:  c.DisableAssetsCapture,
+		DomainsCrawl:          c.DomainsCrawl,
+		MaxHops:               uint64(c.MaxHops),
+		DisabledHTMLTags:      c.DisabledHTMLTags,
+		MaxConcurrentAssets:   c.MaxConcurrentAssets,
+		MaxRetry:              c.MaxRetry,
+		MaxRedirect:           c.MaxRedirect,
+		CaptureAlternatePages: c.CaptureAlternatePages,
+		HTTPTimeout:           c.HTTPTimeout,
+		Proxy:                 c.Proxy,
+		RandomLocalIP:         c.RandomLocalIP,
+		UserAgent:             c.UserAgent,
+		BypassProxy:           c.BypassProxy,
+		ParentLogger:          c.Log,
+		UseHQ:                 c.UseHQ,
+		UsePrometheus:         c.Prometheus,
+		UseSeencheck:          c.UseSeencheck,
+	}
+	if captureConfig.UseHQ {
+		captureConfig.HQFinishedChannel = c.HQFinishedChannel
+		captureConfig.HQProducerChannel = c.HQProducerChannel
+		captureConfig.HQRateLimitingSendBack = c.HQRateLimitingSendBack
+	}
+	if captureConfig.UsePrometheus {
+		captureConfig.PromIncreaser = c.PromIncreaser
+	}
+	if captureConfig.UseSeencheck {
+		captureConfig.Seencheck = c.Seencheck
+	}
+	capture.Init(captureConfig)
 
 	// Set the crawl state to running
 	stats.SetCrawlState("running")

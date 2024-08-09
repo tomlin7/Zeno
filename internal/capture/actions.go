@@ -3,12 +3,12 @@ package capture
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/url"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/PuerkitoBio/goquery"
@@ -20,11 +20,11 @@ import (
 	"github.com/internetarchive/Zeno/internal/capture/sitespecific/tiktok"
 	"github.com/internetarchive/Zeno/internal/capture/sitespecific/truthsocial"
 	"github.com/internetarchive/Zeno/internal/capture/sitespecific/vk"
+	"github.com/internetarchive/Zeno/internal/hq"
 	"github.com/internetarchive/Zeno/internal/item"
-	"github.com/internetarchive/Zeno/internal/queue"
+	"github.com/internetarchive/Zeno/internal/reactor"
 	"github.com/internetarchive/Zeno/internal/stats"
 	"github.com/internetarchive/Zeno/internal/utils"
-	"github.com/remeh/sizedwaitgroup"
 )
 
 // Capture capture the URL and return the outlinks
@@ -278,7 +278,7 @@ func Capture(itemToCapture *item.Item) error {
 				packageClient.seencheckURL(cfstreamURL, "asset")
 			}
 		} else if packageClient.useHQ {
-			_, err := c.HQSeencheckURLs(utils.StringSliceToURLSlice(cfstreamURLs))
+			_, err := hq.SeencheckURLs(utils.StringSliceToURLSlice(cfstreamURLs))
 			if err != nil {
 				packageClient.logger.Error("error while seenchecking Cloudflarestream assets via HQ", "error", err, "url", itemToCapture.URL)
 			}
@@ -293,7 +293,7 @@ func Capture(itemToCapture *item.Item) error {
 	// Websites can use a <base> tag to specify a base for relative URLs in every other tags.
 	// This checks for the "base" tag and resets the "base" URL variable with the new base URL specified
 	// https://developer.mozilla.org/en-US/docs/Web/HTML/Element/base
-	if !utils.StringInSlice("base", c.DisabledHTMLTags) {
+	if !utils.StringInSlice("base", packageClient.disabledHTMLTags) {
 		oldBase := base
 
 		doc.Find("base").Each(func(index int, goitem *goquery.Selection) {
@@ -307,7 +307,7 @@ func Capture(itemToCapture *item.Item) error {
 			if exists {
 				baseTagValue, err := url.Parse(link)
 				if err != nil {
-					c.Log.WithFields(c.genLogFields(err, item.URL, nil)).Error("error while parsing base tag value")
+					packageClient.logger.Error("error while parsing base tag value", "error", err, "url", itemToCapture.URL)
 				} else {
 					base = baseTagValue
 				}
@@ -318,21 +318,21 @@ func Capture(itemToCapture *item.Item) error {
 	// Extract outlinks
 	outlinks, err := extractOutlinks(base, doc)
 	if err != nil {
-		c.Log.WithFields(c.genLogFields(err, item.URL, nil)).Error("error while extracting outlinks")
+		packageClient.logger.Error("error while extracting outlinks", "error", err, "url", itemToCapture.URL)
 		return err
 	}
 
 	waitGroup.Add(1)
-	go c.queueOutlinks(outlinks, item, &waitGroup)
+	go queueOutlinks(outlinks, itemToCapture, &waitGroup)
 
-	if c.DisableAssetsCapture {
+	if packageClient.disableAssetsCapture {
 		return err
 	}
 
 	// Extract and capture assets
-	assets, err := c.extractAssets(base, item, doc)
+	assets, err := extractAssets(base, itemToCapture, doc)
 	if err != nil {
-		c.Log.WithFields(c.genLogFields(err, item.URL, nil)).Error("error while extracting assets")
+		packageClient.logger.Error("error while extracting assets", "error", err, "url", itemToCapture.URL)
 		return err
 	}
 
@@ -344,11 +344,11 @@ func Capture(itemToCapture *item.Item) error {
 	// If --local-seencheck is enabled, then we check if the assets are in the
 	// seencheck DB. If they are, then they are skipped.
 	// Else, if we use HQ, then we use HQ's seencheck.
-	if c.UseSeencheck {
+	if packageClient.useSeencheck {
 		seencheckedBatch := []*url.URL{}
 
 		for _, URL := range assets {
-			found := c.seencheckURL(utils.URLToString(URL), "asset")
+			found := packageClient.seencheckURL(utils.URLToString(URL), "asset")
 			if found {
 				continue
 			}
@@ -360,17 +360,13 @@ func Capture(itemToCapture *item.Item) error {
 		}
 
 		assets = seencheckedBatch
-	} else if c.UseHQ {
-		seencheckedURLs, err := c.HQSeencheckURLs(assets)
+	} else if packageClient.useHQ {
+		seencheckedURLs, err := hq.SeencheckURLs(assets)
 		// We ignore the error here because we don't want to slow down the crawl
 		// if HQ is down or if the request failed. So if we get an error, we just
 		// continue with the original list of assets.
 		if err != nil {
-			c.Log.WithFields(c.genLogFields(err, nil, map[string]interface{}{
-				"urls":      assets,
-				"parentHop": item.Hop,
-				"parentUrl": utils.URLToString(item.URL),
-			})).Error("error while seenchecking assets via HQ")
+			packageClient.logger.Error("error while seenchecking assets via HQ", "error", err, "url", itemToCapture.URL, "parentHop", itemToCapture.Hop, "parentURL", itemToCapture.URL)
 		} else {
 			assets = seencheckedURLs
 		}
@@ -383,101 +379,57 @@ func Capture(itemToCapture *item.Item) error {
 	// TODO: implement a counter for the number of assets
 	// currently being processed
 	// c.Frontier.QueueCount.Incr(int64(len(assets)))
-	swg := sizedwaitgroup.New(int(c.MaxConcurrentAssets))
-	excluded := false
-
-	for _, asset := range assets {
+	assetItemList := []*item.Item{}
+	for i, asset := range assets {
 		// TODO: implement a counter for the number of assets
 		// currently being processed
-		// c.Frontier.QueueCount.Incr(-1)
 
 		// Just making sure we do not over archive by archiving the original URL
-		if utils.URLToString(item.URL) == utils.URLToString(asset) {
+		if utils.URLToString(itemToCapture.URL) == utils.URLToString(asset) {
 			continue
 		}
 
 		// We ban googlevideo.com URLs because they are heavily rate limited by default, and
 		// we don't want the crawler to spend an innapropriate amount of time archiving them
-		if strings.Contains(item.URL.Host, "googlevideo.com") {
+		if strings.Contains(itemToCapture.URL.Host, "googlevideo.com") {
 			continue
 		}
 
-		// If the URL match any excluded string, we ignore it
-		for _, excludedString := range c.ExcludedStrings {
-			if strings.Contains(utils.URLToString(asset), excludedString) {
-				excluded = true
-				break
-			}
-		}
-
-		if excluded {
-			excluded = false
-			continue
-		}
-
-		swg.Add()
-		stats.IncreaseURIPerSecond(1)
-
-		go func(asset *url.URL, swg *sizedwaitgroup.SizedWaitGroup) {
-			defer swg.Done()
-
-			// Create the asset's item
-			newAsset, err := item.New(asset, item.URL, "asset", item.Hop, "", false)
-			if err != nil {
-				c.Log.WithFields(c.genLogFields(err, asset, map[string]interface{}{
-					"parentHop": item.Hop,
-					"parentUrl": utils.URLToString(item.URL),
-					"type":      "asset",
-				})).Error("error while creating asset item")
-				return
-			}
-
-			// Capture the asset
-			err = c.captureAsset(newAsset, resp.Cookies())
-			if err != nil {
-				c.Log.WithFields(c.genLogFields(err, &asset, map[string]interface{}{
-					"parentHop": item.Hop,
-					"parentUrl": utils.URLToString(item.URL),
-					"type":      "asset",
-				})).Error("error while capturing asset")
-				return
-			}
-
-			// If we made it to this point, it means that the asset have been crawled successfully,
-			// then we can increment the locallyCrawled variable
-			atomic.AddUint64(&item.LocallyCrawled, 1)
-		}(asset, &swg)
+		// Create a new item for the asset
+		assetID := fmt.Sprintf("%s-asset-%d", itemToCapture.ID, i)
+		assetItem, _ := item.New(asset, itemToCapture.URL, item.TypeAsset, itemToCapture.Hop+1, assetID, false)
+		assetItemList = append(assetItemList, assetItem)
 	}
 
-	swg.Wait()
+	go reactor.CrawlAssetsWithConcurrency(&reactor.AssetsWithConcurrency{
+		ParentItem:  itemToCapture,
+		Assets:      assetItemList,
+		Concurrency: packageClient.maxConcurrentAssets,
+	})
+
 	return err
 }
 
-func executeGET(item *queue.Item, req *http.Request, isRedirection bool) (resp *http.Response, err error) {
+func executeGET(itemToCapture *item.Item, req *http.Request, isRedirection bool) (resp *http.Response, err error) {
 	var (
 		executionStart = time.Now()
-		newItem        *queue.Item
+		newItem        *item.Item
 		newReq         *http.Request
 		URL            *url.URL
 	)
 
 	defer func() {
-		if c.PrometheusMetrics != nil {
-			c.PrometheusMetrics.DownloadedURI.Inc()
+		if packageClient.usePrometheus {
+			packageClient.promIncreaser <- struct{}{}
 		}
 
 		stats.IncreaseURIPerSecond(1)
-		if item.Type == "seed" {
+		if itemToCapture.Type == item.TypeSeed {
 			stats.IncreaseCrawledSeeds(1)
-		} else if item.Type == "asset" {
+		} else if itemToCapture.Type == item.TypeAsset {
 			stats.IncreaseCrawledAssets(1)
 		}
 	}()
-
-	// Check if the crawl is paused
-	for c.Paused.Get() {
-		time.Sleep(time.Second)
-	}
 
 	// TODO: re-implement host limitation
 	// Temporarily pause crawls for individual hosts if they are over our configured maximum concurrent requests per domain.
@@ -492,19 +444,19 @@ func executeGET(item *queue.Item, req *http.Request, isRedirection bool) (resp *
 	//}
 
 	// Retry on 429 error
-	for retry := uint8(0); retry < c.MaxRetry; retry++ {
+	for retry := uint8(0); retry < packageClient.maxRetry; retry++ {
 		// Execute GET request
-		if c.ClientProxied == nil || utils.StringContainsSliceElements(req.URL.Host, c.BypassProxy) {
-			resp, err = c.Client.Do(req)
+		if packageClient.proxiedClient == nil || utils.StringContainsSliceElements(req.URL.Host, packageClient.bypassProxy) {
+			resp, err = packageClient.client.Do(req)
 			if err != nil {
-				if retry+1 >= c.MaxRetry {
+				if retry+1 >= packageClient.maxRetry {
 					return resp, err
 				}
 			}
 		} else {
-			resp, err = c.ClientProxied.Do(req)
+			resp, err = packageClient.proxiedClient.Do(req)
 			if err != nil {
-				if retry+1 >= c.MaxRetry {
+				if retry+1 >= packageClient.maxRetry {
 					return resp, err
 				}
 			}
@@ -518,7 +470,7 @@ func executeGET(item *queue.Item, req *http.Request, isRedirection bool) (resp *
 				return nil, err
 			}
 
-			c.Log.WithFields(c.genLogFields(err, req.URL, nil)).Error("error while executing GET request, retrying", "retries", retry)
+			packageClient.logger.Error("error while executing GET request, retrying", "error", err, "url", req.URL, "retries", retry)
 
 			time.Sleep(sleepTime)
 
@@ -526,11 +478,7 @@ func executeGET(item *queue.Item, req *http.Request, isRedirection bool) (resp *
 		}
 
 		if resp.StatusCode == 429 {
-			c.Log.WithFields(c.genLogFields(err, req.URL, map[string]interface{}{
-				"sleepTime":  sleepTime.String(),
-				"retryCount": retry,
-				"statusCode": resp.StatusCode,
-			})).Info("we are being rate limited")
+			packageClient.logger.Info("we are being rate limited", "error", err, "url", req.URL, "sleepTime", sleepTime.String(), "retryCount", retry, "statusCode", resp.StatusCode)
 
 			// This ensures we aren't leaving the warc dialer hanging.
 			// Do note, 429s are filtered out by WARC writer regardless.
@@ -538,24 +486,20 @@ func executeGET(item *queue.Item, req *http.Request, isRedirection bool) (resp *
 			resp.Body.Close()
 
 			// If --hq-rate-limiting-send-back is enabled, we send the URL back to HQ
-			if c.UseHQ && c.HQRateLimitingSendBack {
+			if packageClient.useHQ && packageClient.hqRateLimitingSendBack {
 				return nil, errors.New("URL is being rate limited, sending back to HQ")
 			}
-			c.Log.WithFields(c.genLogFields(err, req.URL, map[string]interface{}{
-				"sleepTime":  sleepTime.String(),
-				"retryCount": retry,
-				"statusCode": resp.StatusCode,
-			})).Warn("URL is being rate limited")
+			packageClient.logger.Warn("URL is being rate limited", "error", err, "url", req.URL, "sleepTime", sleepTime.String(), "retryCount", retry, "statusCode", resp.StatusCode)
 
 			continue
 		}
-		c.logCrawlSuccess(executionStart, resp.StatusCode, item)
+		packageClient.logCrawlSuccess(executionStart, resp.StatusCode, itemToCapture)
 		break
 	}
 
 	// If a redirection is catched, then we execute the redirection
 	if isStatusCodeRedirect(resp.StatusCode) {
-		if resp.Header.Get("location") == utils.URLToString(req.URL) || item.Redirect >= uint64(c.MaxRedirect) {
+		if resp.Header.Get("location") == utils.URLToString(req.URL) || itemToCapture.Redirect >= uint64(packageClient.maxRedirect) {
 			return resp, nil
 		}
 		defer resp.Body.Close()
@@ -576,13 +520,13 @@ func executeGET(item *queue.Item, req *http.Request, isRedirection bool) (resp *
 		}
 
 		// Seencheck the URL
-		if c.UseSeencheck {
-			found := c.seencheckURL(utils.URLToString(URL), "seed")
+		if packageClient.useSeencheck {
+			found := packageClient.seencheckURL(utils.URLToString(URL), "seed")
 			if found {
 				return nil, errors.New("URL from redirection has already been seen")
 			}
-		} else if c.UseHQ {
-			isNewURL, err := c.HQSeencheckURL(URL)
+		} else if packageClient.useHQ {
+			isNewURL, err := hq.SeencheckURL(URL)
 			if err != nil {
 				return resp, err
 			}
@@ -592,12 +536,12 @@ func executeGET(item *queue.Item, req *http.Request, isRedirection bool) (resp *
 			}
 		}
 
-		newItem, err = item.New(URL, item.URL, item.Type, item.Hop, item.ID, false)
+		newItem, err = item.New(URL, itemToCapture.URL, itemToCapture.Type, itemToCapture.Hop, itemToCapture.ID, false)
 		if err != nil {
 			return nil, err
 		}
 
-		newItem.Redirect = item.Redirect + 1
+		newItem.Redirect = itemToCapture.Redirect + 1
 
 		// Prepare GET request
 		newReq, err = http.NewRequest("GET", utils.URLToString(URL), nil)
@@ -606,10 +550,10 @@ func executeGET(item *queue.Item, req *http.Request, isRedirection bool) (resp *
 		}
 
 		// Set new request headers on the new request :(
-		newReq.Header.Set("User-Agent", c.UserAgent)
+		newReq.Header.Set("User-Agent", packageClient.userAgent)
 		newReq.Header.Set("Referer", utils.URLToString(newItem.ParentURL))
 
-		return c.executeGET(newItem, newReq, true)
+		return executeGET(newItem, newReq, true)
 	}
 
 	return resp, nil
@@ -625,14 +569,14 @@ func captureAsset(item *item.Item, cookies []*http.Cookie) error {
 	}
 
 	req.Header.Set("Referer", utils.URLToString(item.ParentURL))
-	req.Header.Set("User-Agent", c.UserAgent)
+	req.Header.Set("User-Agent", packageClient.userAgent)
 
 	// Apply cookies obtained from the original URL captured
 	for i := range cookies {
 		req.AddCookie(cookies[i])
 	}
 
-	resp, err = c.executeGET(item, req, false)
+	resp, err = executeGET(item, req, false)
 	if err != nil && err.Error() == "URL from redirection has already been seen" {
 		return nil
 	} else if err != nil {

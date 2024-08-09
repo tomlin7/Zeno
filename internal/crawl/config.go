@@ -80,10 +80,11 @@ type Crawl struct {
 	BypassProxy []string
 
 	// API settings
-	API               bool
-	APIPort           string
-	Prometheus        bool
-	PrometheusMetrics *PrometheusMetrics
+	API              bool
+	APIPort          string
+	Prometheus       bool
+	PrometheusPrefix string
+	PromIncreaser    chan struct{}
 
 	// WARC settings
 	WARCPrefix         string
@@ -235,8 +236,7 @@ func GenerateCrawlConfig(config *config.Config) (*Crawl, error) {
 	c.Prometheus = config.Prometheus
 	if c.Prometheus {
 		c.API = true
-		c.PrometheusMetrics = &PrometheusMetrics{}
-		c.PrometheusMetrics.Prefix = config.PrometheusPrefix
+		c.PrometheusPrefix = config.PrometheusPrefix
 	}
 
 	if config.UserAgent != "Zeno" {

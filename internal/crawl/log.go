@@ -3,10 +3,8 @@ package crawl
 import (
 	"net/url"
 	"sync"
-	"time"
 
 	"github.com/CorentinB/warc"
-	"github.com/internetarchive/Zeno/internal/item"
 	"github.com/internetarchive/Zeno/internal/stats"
 	"github.com/internetarchive/Zeno/internal/utils"
 	"github.com/sirupsen/logrus"
@@ -77,16 +75,4 @@ func (c *Crawl) genLogFields(err interface{}, URL interface{}, additionalFields 
 	}
 
 	return fields
-}
-
-func (c *Crawl) logCrawlSuccess(executionStart time.Time, statusCode int, item *item.Item) {
-	fields := c.genLogFields(nil, item.URL, nil)
-
-	fields["statusCode"] = statusCode
-	fields["hop"] = item.Hop
-	fields["type"] = item.Type
-	fields["executionTime"] = time.Since(executionStart).Milliseconds()
-	fields["url"] = utils.URLToString(item.URL)
-
-	c.Log.WithFields(fields).Info("URL archived")
 }

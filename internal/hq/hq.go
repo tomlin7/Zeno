@@ -392,7 +392,8 @@ func finisher() {
 	}
 }
 
-func HQSeencheckURLs(URLs []*url.URL) (seencheckedBatch []*url.URL, err error) {
+// SeencheckURLs checks if the URLs are already seen by the HQ
+func SeencheckURLs(URLs []*url.URL) (seencheckedBatch []*url.URL, err error) {
 	var (
 		discoveredURLs []gocrawlhq.URL
 	)
@@ -425,7 +426,8 @@ func HQSeencheckURLs(URLs []*url.URL) (seencheckedBatch []*url.URL, err error) {
 	return seencheckedBatch, nil
 }
 
-func HQSeencheckURL(URL *url.URL) (bool, error) {
+// SeencheckURL checks if the URL is already seen by the HQ
+func SeencheckURL(URL *url.URL) (bool, error) {
 	discoveredURL := gocrawlhq.URL{
 		Value: utils.URLToString(URL),
 	}

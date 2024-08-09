@@ -3,7 +3,6 @@ package crawl
 import (
 	"fmt"
 	"net/url"
-	"regexp"
 	"time"
 
 	"github.com/internetarchive/Zeno/internal/hq"
@@ -22,8 +21,6 @@ const (
 	// GB represent a GigaByte
 	GB = 1024 * MB
 )
-
-var regexOutlinks *regexp.Regexp
 
 // TODO: re-implement host limitation
 // func (c *Crawl) crawlSpeedLimiter() {
@@ -93,38 +90,7 @@ func (c *Crawl) excludeHosts(URLs []*url.URL) (output []*url.URL) {
 	return output
 }
 
-func extractLinksFromText(source string) (links []*url.URL) {
-	// Extract links and dedupe them
-	rawLinks := utils.DedupeStrings(regexOutlinks.FindAllString(source, -1))
-
-	// Validate links
-	for _, link := range rawLinks {
-		URL, err := url.Parse(link)
-		if err != nil {
-			continue
-		}
-
-		err = utils.ValidateURL(URL)
-		if err != nil {
-			continue
-		}
-
-		links = append(links, URL)
-	}
-
-	return links
-}
-
 // TODO: re-implement host limitation
 // func (c *Crawl) shouldPause(host string) bool {
 // 	return c.Frontier.GetActiveHostCount(host) >= c.MaxConcurrentRequestsPerDomain
 // }
-
-func isStatusCodeRedirect(statusCode int) bool {
-	if statusCode == 300 || statusCode == 301 ||
-		statusCode == 302 || statusCode == 307 ||
-		statusCode == 308 {
-		return true
-	}
-	return false
-}

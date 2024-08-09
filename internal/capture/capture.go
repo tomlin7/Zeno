@@ -7,6 +7,7 @@ import (
 	"github.com/internetarchive/Zeno/internal/item"
 	"github.com/internetarchive/Zeno/internal/log"
 	"github.com/internetarchive/Zeno/internal/seencheck"
+	"mvdan.cc/xurls/v2"
 )
 
 type Config struct {
@@ -26,9 +27,14 @@ type Config struct {
 	JobPath      string
 
 	// Crawls settings
-	DisableAssetsCapture bool
-	DomainsCrawl         bool
-	MaxHops              uint64
+	DisableAssetsCapture  bool
+	DomainsCrawl          bool
+	MaxHops               uint64
+	DisabledHTMLTags      []string
+	MaxConcurrentAssets   int
+	MaxRetry              uint8
+	MaxRedirect           uint8
+	CaptureAlternatePages bool
 
 	// Seencheck settings
 	UseSeencheck bool
@@ -39,14 +45,20 @@ type Config struct {
 	Proxy         string
 	RandomLocalIP bool
 	UserAgent     string
+	BypassProxy   []string
 
 	// Logging
 	ParentLogger *log.Logger
 
 	// HQ
-	UseHQ             bool
-	HQFinishedChannel chan *item.Item
-	HQProducerChannel chan *item.Item
+	UseHQ                  bool
+	HQFinishedChannel      chan *item.Item
+	HQProducerChannel      chan *item.Item
+	HQRateLimitingSendBack bool
+
+	// Prometheus
+	UsePrometheus bool
+	PromIncreaser chan struct{}
 }
 
 type client struct {
@@ -55,18 +67,29 @@ type client struct {
 	proxiedClient            *warc.CustomHTTPClient
 	stopMonitorWARCWaitGroup chan struct{}
 	userAgent                string
+	disabledHTMLTags         []string
+	bypassProxy              []string
 
 	// HQ
-	useHQ             bool
-	hqFinishedChannel chan *item.Item
-	hqProducerChannel chan *item.Item
+	useHQ                  bool
+	hqFinishedChannel      chan *item.Item
+	hqProducerChannel      chan *item.Item
+	hqRateLimitingSendBack bool
 
-	// Outlinks local processing
-	domainsCrawl         bool
-	maxHops              uint64
-	disableAssetsCapture bool
-	useSeencheck         bool
-	seencheck            *seencheck.Seencheck
+	// local processing
+	domainsCrawl          bool
+	maxHops               uint64
+	disableAssetsCapture  bool
+	useSeencheck          bool
+	seencheck             *seencheck.Seencheck
+	maxConcurrentAssets   int
+	maxRetry              uint8
+	maxRedirect           uint8
+	captureAlternatePages bool
+
+	// Prometheus
+	usePrometheus bool
+	promIncreaser chan struct{}
 
 	// Internal
 	logger *log.FieldedLogger
@@ -79,6 +102,8 @@ var (
 
 func Init(config *Config) {
 	var newClient *client
+
+	regexOutlinks = xurls.Relaxed()
 
 	// Init logger
 	fieldedLogger := config.ParentLogger.WithFields(map[string]interface{}{"module": "capture"})
@@ -145,9 +170,14 @@ func Init(config *Config) {
 	}
 
 	newClient.client = newHTTPClient
+
 	newClient.useHQ = config.UseHQ
-	newClient.hqFinishedChannel = config.HQFinishedChannel
-	newClient.hqProducerChannel = config.HQProducerChannel
+	if newClient.useHQ {
+		newClient.hqRateLimitingSendBack = config.HQRateLimitingSendBack
+		newClient.hqFinishedChannel = config.HQFinishedChannel
+		newClient.hqProducerChannel = config.HQProducerChannel
+	}
+
 	newClient.logger = fieldedLogger
 	newClient.stopMonitorWARCWaitGroup = make(chan struct{})
 	newClient.userAgent = config.UserAgent
@@ -156,6 +186,16 @@ func Init(config *Config) {
 	newClient.disableAssetsCapture = config.DisableAssetsCapture
 	newClient.useSeencheck = config.UseSeencheck
 	newClient.seencheck = config.Seencheck
+	newClient.disabledHTMLTags = config.DisabledHTMLTags
+	newClient.usePrometheus = config.UsePrometheus
+	newClient.maxConcurrentAssets = config.MaxConcurrentAssets
+	newClient.bypassProxy = config.BypassProxy
+	newClient.maxRetry = config.MaxRetry
+	newClient.maxRedirect = config.MaxRedirect
+
+	if newClient.usePrometheus {
+		newClient.promIncreaser = config.PromIncreaser
+	}
 
 	if !isinit {
 		packageClient = newClient

@@ -1,4 +1,4 @@
-package crawl
+package capture
 
 import (
 	"net/url"
@@ -7,18 +7,18 @@ import (
 
 	"github.com/PuerkitoBio/goquery"
 	"github.com/internetarchive/Zeno/internal/capture/sitespecific/cloudflarestream"
-	"github.com/internetarchive/Zeno/internal/queue"
+	"github.com/internetarchive/Zeno/internal/item"
 	"github.com/internetarchive/Zeno/internal/utils"
 )
 
-func (c *Crawl) extractAssets(base *url.URL, item *queue.Item, doc *goquery.Document) (assets []*url.URL, err error) {
+func extractAssets(base *url.URL, item *item.Item, doc *goquery.Document) (assets []*url.URL, err error) {
 	var rawAssets []string
 
 	// Execute plugins on the response
 	if strings.Contains(base.Host, "cloudflarestream.com") {
-		cloudflarestreamURLs, err := cloudflarestream.GetSegments(base, *c.Client)
+		cloudflarestreamURLs, err := cloudflarestream.GetSegments(base, *packageClient.client)
 		if err != nil {
-			c.Log.WithFields(c.genLogFields(err, item.URL, nil)).Warn("error getting cloudflarestream segments")
+			packageClient.logger.Warn("error getting cloudflarestream segments", "error", err, "url", item.URL)
 		}
 
 		if len(cloudflarestreamURLs) > 0 {
@@ -58,7 +58,7 @@ func (c *Crawl) extractAssets(base *url.URL, item *queue.Item, doc *goquery.Docu
 	})
 
 	// Extract assets on the page (images, scripts, videos..)
-	if !utils.StringInSlice("img", c.DisabledHTMLTags) {
+	if !utils.StringInSlice("img", packageClient.disabledHTMLTags) {
 		doc.Find("img").Each(func(index int, item *goquery.Selection) {
 			link, exists := item.Attr("src")
 			if exists {
@@ -93,7 +93,7 @@ func (c *Crawl) extractAssets(base *url.URL, item *queue.Item, doc *goquery.Docu
 		})
 	}
 
-	if !utils.StringInSlice("video", c.DisabledHTMLTags) {
+	if !utils.StringInSlice("video", packageClient.disabledHTMLTags) {
 		doc.Find("video").Each(func(index int, item *goquery.Selection) {
 			link, exists := item.Attr("src")
 			if exists {
@@ -102,7 +102,7 @@ func (c *Crawl) extractAssets(base *url.URL, item *queue.Item, doc *goquery.Docu
 		})
 	}
 
-	if !utils.StringInSlice("style", c.DisabledHTMLTags) {
+	if !utils.StringInSlice("style", packageClient.disabledHTMLTags) {
 		doc.Find("style").Each(func(index int, item *goquery.Selection) {
 			re := regexp.MustCompile(`(?m)url\((.*?)\)`)
 			matches := re.FindAllStringSubmatch(item.Text(), -1)
@@ -126,7 +126,7 @@ func (c *Crawl) extractAssets(base *url.URL, item *queue.Item, doc *goquery.Docu
 		})
 	}
 
-	if !utils.StringInSlice("script", c.DisabledHTMLTags) {
+	if !utils.StringInSlice("script", packageClient.disabledHTMLTags) {
 		doc.Find("script").Each(func(index int, item *goquery.Selection) {
 			link, exists := item.Attr("src")
 			if exists {
@@ -144,7 +144,7 @@ func (c *Crawl) extractAssets(base *url.URL, item *queue.Item, doc *goquery.Docu
 			// Apply regex on the script's HTML to extract potential assets
 			outerHTML, err := goquery.OuterHtml(item)
 			if err != nil {
-				c.Log.Warn("crawl/assets.go:extractAssets():goquery.OuterHtml():", "error", err)
+				packageClient.logger.Warn("capture/assets.go:extractAssets():goquery.OuterHtml():", "error", err)
 			} else {
 				scriptLinks := utils.DedupeStrings(regexOutlinks.FindAllString(outerHTML, -1))
 				for _, scriptLink := range scriptLinks {
@@ -192,9 +192,9 @@ func (c *Crawl) extractAssets(base *url.URL, item *queue.Item, doc *goquery.Docu
 		})
 	}
 
-	if !utils.StringInSlice("link", c.DisabledHTMLTags) {
+	if !utils.StringInSlice("link", packageClient.disabledHTMLTags) {
 		doc.Find("link").Each(func(index int, item *goquery.Selection) {
-			if !c.CaptureAlternatePages {
+			if !packageClient.captureAlternatePages {
 				relation, exists := item.Attr("rel")
 				if exists && relation == "alternate" {
 					return
@@ -208,7 +208,7 @@ func (c *Crawl) extractAssets(base *url.URL, item *queue.Item, doc *goquery.Docu
 		})
 	}
 
-	if !utils.StringInSlice("audio", c.DisabledHTMLTags) {
+	if !utils.StringInSlice("audio", packageClient.disabledHTMLTags) {
 		doc.Find("audio").Each(func(index int, item *goquery.Selection) {
 			link, exists := item.Attr("src")
 			if exists {
@@ -217,7 +217,7 @@ func (c *Crawl) extractAssets(base *url.URL, item *queue.Item, doc *goquery.Docu
 		})
 	}
 
-	if !utils.StringInSlice("meta", c.DisabledHTMLTags) {
+	if !utils.StringInSlice("meta", packageClient.disabledHTMLTags) {
 		doc.Find("meta").Each(func(index int, item *goquery.Selection) {
 			link, exists := item.Attr("href")
 			if exists {
@@ -232,7 +232,7 @@ func (c *Crawl) extractAssets(base *url.URL, item *queue.Item, doc *goquery.Docu
 		})
 	}
 
-	if !utils.StringInSlice("source", c.DisabledHTMLTags) {
+	if !utils.StringInSlice("source", packageClient.disabledHTMLTags) {
 		doc.Find("source").Each(func(index int, item *goquery.Selection) {
 			link, exists := item.Attr("src")
 			if exists {
@@ -259,9 +259,6 @@ func (c *Crawl) extractAssets(base *url.URL, item *queue.Item, doc *goquery.Docu
 
 	// Turn strings into url.URL
 	assets = append(assets, utils.StringSliceToURLSlice(rawAssets)...)
-
-	// Ensure that excluded hosts aren't in the assets.
-	assets = c.excludeHosts(assets)
 
 	// Go over all assets and outlinks and make sure they are absolute links
 	assets = utils.MakeAbsolute(base, assets)
