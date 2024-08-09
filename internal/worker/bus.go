@@ -1,6 +1,7 @@
 package worker
 
 import (
+	"sync"
 	"sync/atomic"
 
 	"github.com/google/uuid"
@@ -30,7 +31,7 @@ type Bus struct {
 	//Internal
 	addConsumerCh    chan *consumer
 	removeConsumerCh chan string
-	consumers        *atomic.Value //map[uuid.UUID]*consumer
+	consumers        *sync.Map
 	isConsuming      *atomic.Bool
 	logger           *log.FieldedLogger
 }
@@ -51,7 +52,7 @@ func newBus(parentLogger *log.Logger) *Bus {
 		Send:             make(chan *item.Item),
 		addConsumerCh:    make(chan *consumer),
 		removeConsumerCh: make(chan string),
-		consumers:        new(atomic.Value),
+		consumers:        new(sync.Map),
 		isConsuming:      new(atomic.Bool),
 		logger:           fieldedLogger,
 	}
@@ -67,15 +68,18 @@ func (b *Bus) run() {
 		case <-b.Unpause:
 			b.paused.Store(false)
 		case <-b.Stop:
-			consumers := b.consumers.Load().(map[string]*consumer)
-			for _, consumer := range consumers {
+			b.consumers.Range(func(key, value interface{}) bool {
+				consumer := value.(*consumer)
 				b.logger.Info("Stopping worker/consummer pair", "worker", consumer.id)
 				consumer.stop <- struct{}{}
-			}
-			for _, consumer := range consumers {
+				return true
+			})
+			b.consumers.Range(func(key, value interface{}) bool {
+				consumer := value.(*consumer)
 				<-consumer.done
 				close(consumer.done)
-			}
+				return true
+			})
 			b.Done <- struct{}{}
 			return
 		case <-b.StopDequeue:
@@ -83,40 +87,26 @@ func (b *Bus) run() {
 		case <-b.ResumeDequeue:
 			b.canDequeue.Store(true)
 		case recvConsumer := <-b.addConsumerCh:
-			consumers, ok := b.consumers.Load().(map[string]*consumer)
-			newConsumers := make(map[string]*consumer)
-			if ok {
-				for k, v := range consumers {
-					newConsumers[k] = v
-				}
-			}
-			newConsumers[recvConsumer.id] = recvConsumer
-			b.consumers.Store(newConsumers)
+			b.consumers.Store(recvConsumer.id, recvConsumer)
 		case id := <-b.removeConsumerCh:
-			consumers := b.consumers.Load().(map[string]*consumer)
-			newConsumers := make(map[string]*consumer)
-			for consumerID, consumer := range consumers {
-				if consumerID != id {
-					newConsumers[consumerID] = consumer
-				} else {
-					consumer.stop <- struct{}{}
-					<-consumer.done
-					close(consumer.done)
-				}
+			loaded, ok := b.consumers.LoadAndDelete(id)
+			if ok {
+				consumer := loaded.(*consumer)
+				consumer.stop <- struct{}{}
+				<-consumer.done
+				close(consumer.done)
 			}
-			b.consumers.Store(newConsumers)
 		case item := <-b.Recv:
-			consumers, ok := b.consumers.Load().(map[string]*consumer)
-			if !ok {
-				b.Recv <- item
-			}
-			for _, consumer := range consumers {
+			b.consumers.Range(func(key, value interface{}) bool {
+				consumer := value.(*consumer)
 				select {
 				case consumer.item <- item:
+					return false
 				default:
 					// Channel is full, skip
 				}
-			}
+				return true
+			})
 		}
 	}
 }
@@ -129,12 +119,12 @@ type consumer struct {
 	done chan struct{}
 }
 
-func (b *Bus) addConsumer(id uuid.UUID, item chan *item.Item) {
+func (b *Bus) addConsumer(worker *Worker) {
 	c := &consumer{
-		id:   id.String(),
-		item: item,
-		stop: make(chan struct{}),
-		done: make(chan struct{}),
+		id:   worker.ID.String(),
+		item: worker.item,
+		stop: worker.stop,
+		done: worker.done,
 	}
 	b.addConsumerCh <- c
 	b.isConsuming.Store(true)

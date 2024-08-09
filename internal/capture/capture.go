@@ -7,6 +7,7 @@ import (
 	"github.com/internetarchive/Zeno/internal/item"
 	"github.com/internetarchive/Zeno/internal/log"
 	"github.com/internetarchive/Zeno/internal/seencheck"
+	"github.com/telanflow/cookiejar"
 	"mvdan.cc/xurls/v2"
 )
 
@@ -21,6 +22,7 @@ type Config struct {
 	CDXDedupeServer    string
 	WARCCustomCookie   string
 	CertValidation     bool
+	CookieFile         string
 
 	// WARC rotator settings
 	WARCOperator string
@@ -63,12 +65,11 @@ type Config struct {
 
 type client struct {
 	// HTTP client & WARC
-	client                   *warc.CustomHTTPClient
-	proxiedClient            *warc.CustomHTTPClient
-	stopMonitorWARCWaitGroup chan struct{}
-	userAgent                string
-	disabledHTMLTags         []string
-	bypassProxy              []string
+	client           *warc.CustomHTTPClient
+	proxiedClient    *warc.CustomHTTPClient
+	userAgent        string
+	disabledHTMLTags []string
+	bypassProxy      []string
 
 	// HQ
 	useHQ                  bool
@@ -92,7 +93,8 @@ type client struct {
 	promIncreaser chan struct{}
 
 	// Internal
-	logger *log.FieldedLogger
+	logger                   *log.FieldedLogger
+	stopMonitorWARCWaitGroup chan struct{}
 }
 
 var (
@@ -201,11 +203,33 @@ func Init(config *Config) {
 		newClient.promIncreaser = config.PromIncreaser
 	}
 
+	// Parse input cookie file if specified
+	if config.CookieFile != "" {
+		cookieJar, err := cookiejar.NewFileJar(config.CookieFile, nil)
+		if err != nil {
+			newClient.logger.Fatal("Unable to load cookies from file", "error", err)
+		}
+
+		newClient.client.Jar = cookieJar
+	}
+
 	if !isinit {
 		packageClient = newClient
 		go packageClient.monitorWARCWaitGroup()
 		isinit = true
 	} else {
 		fieldedLogger.Fatal("Capture package already initialized")
+	}
+}
+
+func Stop() {
+	if packageClient == nil {
+		return
+	}
+
+	packageClient.stopMonitorWARCWaitGroup <- struct{}{}
+	packageClient.client.Close()
+	if packageClient.proxiedClient != nil {
+		packageClient.proxiedClient.Close()
 	}
 }

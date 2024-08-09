@@ -16,7 +16,6 @@ import (
 	"github.com/internetarchive/Zeno/internal/seencheck"
 	"github.com/internetarchive/Zeno/internal/stats"
 	"github.com/internetarchive/Zeno/internal/utils"
-	"github.com/telanflow/cookiejar"
 )
 
 // Start fire up the crawling process
@@ -78,16 +77,6 @@ func (c *Crawl) Start() (err error) {
 	// Process responsible for slowing or pausing the crawl
 	// when the WARC writing queue gets too big
 	// go c.crawlSpeedLimiter()
-
-	// Parse input cookie file if specified
-	if c.CookieFile != "" {
-		cookieJar, err := cookiejar.NewFileJar(c.CookieFile, nil)
-		if err != nil {
-			c.Log.WithFields(c.genLogFields(err, nil, nil)).Fatal("unable to parse cookie file")
-		}
-
-		c.Client.Jar = cookieJar
-	}
 
 	// If crawl HQ parameters are specified, then we start the background
 	// processes responsible for pulling and pushing seeds from and to HQ

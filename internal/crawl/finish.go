@@ -6,6 +6,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/internetarchive/Zeno/internal/capture"
 	"github.com/internetarchive/Zeno/internal/reactor"
 	"github.com/internetarchive/Zeno/internal/stats"
 )
@@ -60,15 +61,9 @@ func (crawl *Crawl) finish() {
 		crawl.Log.Warn("[HQ] All functions returned")
 	}
 
-	crawl.Log.Warn("[WARC] Closing writer(s)..")
-	crawl.stopMonitorWARCWaitGroup <- struct{}{}
-	crawl.Client.Close()
-
-	if crawl.Proxy != "" {
-		crawl.ClientProxied.Close()
-	}
-
-	crawl.Log.Warn("[WARC] Writer(s) closed")
+	crawl.Log.Warn("[WARC] Closing writer(s) and capture..")
+	capture.Stop()
+	crawl.Log.Warn("[WARC] Writer(s) and capture closed")
 
 	// Closing the queue
 	crawl.Queue.Close()

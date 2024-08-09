@@ -238,6 +238,9 @@ func producer() {
 			packageOperator.doneProducer <- struct{}{}
 			return
 		case discoveredItem := <-packageOperator.hqProducerChannel:
+			if discoveredItem == nil {
+				continue
+			}
 			var via string
 
 			if discoveredItem.ParentURL != nil {
@@ -353,6 +356,9 @@ func finisher() {
 			packageOperator.doneFinisher <- struct{}{}
 			return
 		case finishedItem := <-packageOperator.hqFinishedChannel:
+			if finishedItem == nil {
+				continue
+			}
 			if finishedItem.ID == "" {
 				packageOperator.logger.Warn("URL has no ID, discarding", "url", finishedItem.URL)
 				continue

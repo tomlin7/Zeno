@@ -28,8 +28,7 @@ type Crawl struct {
 	Finished  *utils.TAtomBool
 
 	// Stats
-	UseLiveStats             bool
-	stopMonitorWARCWaitGroup chan struct{}
+	UseLiveStats bool
 
 	// Logger
 	Log *log.Logger
@@ -46,8 +45,6 @@ type Crawl struct {
 
 	// Crawl settings
 	MaxConcurrentAssets            int
-	Client                         *warc.CustomHTTPClient
-	ClientProxied                  *warc.CustomHTTPClient
 	DisabledHTMLTags               []string
 	ExcludedHosts                  []string
 	IncludedHosts                  []string
@@ -161,7 +158,6 @@ func GenerateCrawlConfig(config *config.Config) (*Crawl, error) {
 
 	// Stats
 	c.UseLiveStats = config.LiveStats
-	c.stopMonitorWARCWaitGroup = make(chan struct{})
 
 	// If the job name isn't specified, we generate a random name
 	if config.Job == "" {
