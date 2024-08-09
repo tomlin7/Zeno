@@ -36,6 +36,7 @@ func Capture(itemToCapture *item.Item) error {
 
 	defer func(i *item.Item) {
 		waitGroup.Wait()
+		fmt.Println("Capture done")
 
 		if packageClient.useHQ && i.ID != "" {
 			packageClient.hqFinishedChannel <- i

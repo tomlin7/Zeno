@@ -1,6 +1,7 @@
 package worker
 
 import (
+	"fmt"
 	"sync"
 	"time"
 
@@ -64,7 +65,7 @@ func (wp *Pool) newWorker() *Worker {
 		},
 		stop: make(chan struct{}),
 		done: make(chan struct{}),
-		item: make(chan *item.Item),
+		item: make(chan *item.Item, 1),
 
 		pool: wp,
 	}
@@ -94,8 +95,8 @@ func (w *Worker) Run() {
 			continue
 		}
 		if w.pool.canDequeue.Load() {
-			w.state.lastAction = "waiting for queue to be available"
 			w.state.status = idle
+			w.state.lastAction = "waiting for queue to be available"
 			time.Sleep(10 * time.Millisecond)
 			continue
 		}
@@ -103,6 +104,7 @@ func (w *Worker) Run() {
 		w.state.lastAction = "waiting for next action"
 		select {
 		case <-w.stop:
+			w.state.lastAction = "stopping worker"
 			close(w.item)
 			close(w.stop)
 			w.state.currentItem = nil
@@ -114,15 +116,15 @@ func (w *Worker) Run() {
 		case item := <-w.item:
 			w.state.lastAction = "got item"
 			if item == nil {
-				w.state.lastAction = "item is nil"
+				w.state.lastError = fmt.Errorf("item is nil")
+				w.Unlock()
 				continue
 			}
 			// Launches the capture of the given item
 			w.state.lastAction = "starting capture"
 			w.unsafeCapture(item)
-		default:
+			w.Unlock()
 		}
-		w.Unlock()
 	}
 }
 

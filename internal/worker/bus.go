@@ -97,16 +97,19 @@ func (b *Bus) run() {
 				close(consumer.done)
 			}
 		case item := <-b.Recv:
-			b.consumers.Range(func(key, value interface{}) bool {
-				consumer := value.(*consumer)
-				select {
-				case consumer.item <- item:
-					return false
-				default:
-					// Channel is full, skip
-				}
-				return true
-			})
+			for ok := true; ok; {
+				b.consumers.Range(func(key, value interface{}) bool {
+					consumer := value.(*consumer)
+					select {
+					case consumer.item <- item:
+						ok = false
+						return false
+					default:
+						// Channel is full, skip
+					}
+					return true
+				})
+			}
 		}
 	}
 }

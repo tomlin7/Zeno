@@ -6,13 +6,20 @@ import (
 
 func (p *reactor) sendToProducers(itemToSend *item.Item) {
 	switch itemToSend.Type {
-	case item.TypeOutlink:
-	case item.TypeSeed:
-		if p.useHQ {
-			p.hqTx <- itemToSend
-		} else {
-			// TODO: when queue works with channels, send to queue via channel
-			p.queue.Enqueue(itemToSend)
+	case item.TypeSeed, item.TypeOutlink:
+		select {
+		case p.workersTx <- itemToSend:
+			return
+		default:
+			if p.useHQ {
+				p.hqTx <- itemToSend
+			} else {
+				// TODO: when queue works with channels, send to queue via channel
+				err := p.queue.Enqueue(itemToSend)
+				if err != nil {
+					p.logger.Error("failed to enqueue item", "error", err)
+				}
+			}
 		}
 	case item.TypeAsset:
 		if p.useWorkers {

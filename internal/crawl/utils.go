@@ -60,13 +60,17 @@ func (c *Crawl) handleCrawlPause() {
 			logrus.Errorln(fmt.Sprintf("Not enough disk space: %d GB required, %f GB available. "+
 				"Please free some space for the crawler to resume.", c.MinSpaceRequired, spaceLeft))
 			c.Paused.Set(true)
-			hq.Paused.CompareAndSwap(false, true)
+			if c.UseHQ {
+				hq.Paused.CompareAndSwap(false, true)
+			}
 			c.Queue.Paused.Set(true)
 			c.Workers.Pause <- struct{}{}
 			stats.SetCrawlState("paused")
 		} else {
 			c.Paused.Set(false)
-			hq.Paused.CompareAndSwap(true, false)
+			if c.UseHQ {
+				hq.Paused.CompareAndSwap(true, false)
+			}
 			c.Queue.Paused.Set(false)
 			c.Workers.Unpause <- struct{}{}
 			if stats.GetCrawlState() == "paused" {

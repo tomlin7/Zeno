@@ -37,7 +37,7 @@ func (crawl *Crawl) finish() {
 	crawl.Log.Warn("[QUEUE] Freezing the dequeue")
 	crawl.Queue.FreezeDequeue()
 
-	crawl.Log.Warn("[PROCESSER] Stopping the processer")
+	crawl.Log.Warn("[REACTOR] Stopping the reactor")
 	reactor.Stop()
 
 	crawl.Log.Warn("[WORKERS] Waiting for workers to finish")

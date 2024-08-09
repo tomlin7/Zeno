@@ -152,6 +152,7 @@ func (c *Crawl) Start() (err error) {
 	reactor.Init(&reactor.Config{
 		UseWorkers:   true,
 		WorkerRecvCh: c.Workers.Recv,
+		WorkerCount:  int(c.Workers.Count),
 		UseQueue:     true,
 		Queue:        c.Queue,
 		UseHQ:        c.UseHQ,

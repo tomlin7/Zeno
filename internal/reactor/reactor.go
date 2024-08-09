@@ -4,18 +4,22 @@ import (
 	"sync/atomic"
 
 	"github.com/internetarchive/Zeno/internal/item"
+	"github.com/internetarchive/Zeno/internal/log"
 	"github.com/internetarchive/Zeno/internal/queue"
 )
 
 type Config struct {
 	UseWorkers   bool
 	WorkerRecvCh chan *item.Item
+	WorkerCount  int
 
 	UseQueue bool
 	Queue    *queue.PersistentGroupedQueue
 
 	UseHQ      bool
 	HQProducer chan *item.Item
+
+	Logger *log.Logger
 }
 
 type reactor struct {
@@ -46,7 +50,11 @@ type reactor struct {
 	// queueTx chan *item.Item // Output channel to queue
 
 	// State
-	running *atomic.Bool
+	running     *atomic.Bool
+	workerCount int
+
+	// Logger
+	logger *log.FieldedLogger
 }
 
 var (
@@ -64,8 +72,9 @@ func Init(config *Config) {
 		includedHosts:      []string{},
 		addIncludedHostsCh: make(chan []string),
 		rmIncludedHostsCh:  make(chan []string),
-		captureRx:          make(chan *item.Item),
+		captureRx:          make(chan *item.Item, config.WorkerCount),
 		running:            new(atomic.Bool),
+		workerCount:        config.WorkerCount,
 	}
 	if config.UseWorkers {
 		reactor.useWorkers = true
@@ -79,6 +88,7 @@ func Init(config *Config) {
 		reactor.useHQ = true
 		reactor.hqTx = config.HQProducer
 	}
+	reactor.logger = config.Logger.WithFields(map[string]interface{}{"module": "reactor"})
 	if !isInit {
 		packageReactor = reactor
 		go reactor.run()
@@ -150,10 +160,12 @@ func (p *reactor) run() {
 				}
 			}
 		case item := <-p.captureRx:
-			if item == nil || !p.checkHost(item) {
-				continue
-			}
-			p.sendToProducers(item)
+			go func() {
+				if item == nil || !p.checkHost(item) {
+					return
+				}
+				p.sendToProducers(item)
+			}()
 		default: // TODO : Turn default into a channel receive from queue when queue works with channels
 			if p.useQueue {
 				item, err := p.queue.Dequeue()
