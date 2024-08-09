@@ -101,7 +101,11 @@ var (
 )
 
 func Init(config *Config) {
-	var newClient *client
+	if config == nil {
+		panic("Capture config is nil")
+	}
+
+	newClient := &client{}
 
 	regexOutlinks = xurls.Relaxed()
 

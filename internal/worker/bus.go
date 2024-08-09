@@ -31,6 +31,7 @@ type Bus struct {
 	addConsumerCh    chan *consumer
 	removeConsumerCh chan string
 	consumers        *atomic.Value //map[uuid.UUID]*consumer
+	isConsuming      *atomic.Bool
 	logger           *log.FieldedLogger
 }
 
@@ -51,6 +52,7 @@ func newBus(parentLogger *log.Logger) *Bus {
 		addConsumerCh:    make(chan *consumer),
 		removeConsumerCh: make(chan string),
 		consumers:        new(atomic.Value),
+		isConsuming:      new(atomic.Bool),
 		logger:           fieldedLogger,
 	}
 	go bus.run()
@@ -81,10 +83,12 @@ func (b *Bus) run() {
 		case <-b.ResumeDequeue:
 			b.canDequeue.Store(true)
 		case recvConsumer := <-b.addConsumerCh:
-			consumers := b.consumers.Load().(map[string]*consumer)
+			consumers, ok := b.consumers.Load().(map[string]*consumer)
 			newConsumers := make(map[string]*consumer)
-			for k, v := range consumers {
-				newConsumers[k] = v
+			if ok {
+				for k, v := range consumers {
+					newConsumers[k] = v
+				}
 			}
 			newConsumers[recvConsumer.id] = recvConsumer
 			b.consumers.Store(newConsumers)
@@ -102,7 +106,10 @@ func (b *Bus) run() {
 			}
 			b.consumers.Store(newConsumers)
 		case item := <-b.Recv:
-			consumers := b.consumers.Load().(map[string]*consumer)
+			consumers, ok := b.consumers.Load().(map[string]*consumer)
+			if !ok {
+				b.Recv <- item
+			}
 			for _, consumer := range consumers {
 				select {
 				case consumer.item <- item:
@@ -130,6 +137,7 @@ func (b *Bus) addConsumer(id uuid.UUID, item chan *item.Item) {
 		done: make(chan struct{}),
 	}
 	b.addConsumerCh <- c
+	b.isConsuming.Store(true)
 }
 
 func (b *Bus) removeConsumer(id uuid.UUID) {

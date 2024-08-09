@@ -74,6 +74,8 @@ func (wp *Pool) newWorker() *Worker {
 		panic("Worker UUID already exists, wtf?")
 	}
 
+	wp.addConsumer(worker.ID, worker.item)
+
 	return worker
 }
 
@@ -101,6 +103,7 @@ func (w *Worker) Run() {
 		w.state.lastAction = "waiting for next action"
 		select {
 		case <-w.stop:
+			w.pool.removeConsumer(w.ID)
 			close(w.item)
 			close(w.stop)
 			w.state.currentItem = nil

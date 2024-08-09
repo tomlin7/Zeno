@@ -65,7 +65,7 @@ func (c *Crawl) Start() (err error) {
 	// Initialize the queue & seencheck
 	c.Log.Info("Initializing queue and seencheck..")
 	c.Queue, err = queue.NewPersistentGroupedQueue(path.Join(c.JobPath, "queue"), c.UseHandover, c.UseCommit)
-	if err != nil {
+	if err != nil || c.Queue == nil {
 		c.Log.Fatal("unable to init queue", "error", err)
 	}
 
@@ -73,10 +73,6 @@ func (c *Crawl) Start() (err error) {
 	if err != nil {
 		c.Log.Fatal("unable to init seencheck", "error", err)
 	}
-
-	// Start the background process that will periodically check if the disk
-	// have enough free space, and potentially pause the crawl if it doesn't
-	go c.handleCrawlPause()
 
 	// TODO: re-implement host limitation
 	// Process responsible for slowing or pausing the crawl
@@ -144,36 +140,6 @@ func (c *Crawl) Start() (err error) {
 		c.Log.Info("All seeds are now in queue")
 	}
 
-	// Initialize WARC writer
-	c.Log.Info("Initializing WARC writer in capture..")
-	capture.Init(&capture.Config{
-		WARCPrefix:           c.WARCPrefix,
-		WARCPoolSize:         c.WARCPoolSize,
-		WARCTempDir:          c.WARCTempDir,
-		WARCFullOnDisk:       c.WARCFullOnDisk,
-		WARCDedupSize:        c.WARCDedupSize,
-		DisableLocalDedupe:   c.DisableLocalDedupe,
-		CDXDedupeServer:      c.CDXDedupeServer,
-		WARCCustomCookie:     c.WARCCustomCookie,
-		CertValidation:       c.CertValidation,
-		WARCOperator:         c.WARCOperator,
-		JobPath:              c.JobPath,
-		HTTPTimeout:          c.HTTPTimeout,
-		UserAgent:            c.UserAgent,
-		Proxy:                c.Proxy,
-		RandomLocalIP:        c.RandomLocalIP,
-		ParentLogger:         c.Log,
-		UseHQ:                c.UseHQ,
-		HQFinishedChannel:    c.HQFinishedChannel,
-		HQProducerChannel:    c.HQProducerChannel,
-		DisableAssetsCapture: c.DisableAssetsCapture,
-		DomainsCrawl:         c.DomainsCrawl,
-		MaxHops:              uint64(c.MaxHops),
-		UseSeencheck:         c.UseSeencheck,
-		Seencheck:            c.Seencheck,
-	})
-	c.Log.Info("WARC writer initialized")
-
 	if c.API {
 		c.PromIncreaser = make(chan struct{}, 10)
 		api.Init(&api.Config{
@@ -203,6 +169,8 @@ func (c *Crawl) Start() (err error) {
 		HQProducer:   c.HQProducerChannel,
 	})
 
+	// Initialize Capture and WARC writer
+	c.Log.Info("Initializing WARC writer in capture..")
 	captureConfig := &capture.Config{
 		WARCPrefix:            c.WARCPrefix,
 		WARCPoolSize:          c.WARCPoolSize,
@@ -245,6 +213,11 @@ func (c *Crawl) Start() (err error) {
 		captureConfig.Seencheck = c.Seencheck
 	}
 	capture.Init(captureConfig)
+	c.Log.Info("WARC writer initialized")
+
+	// Start the background process that will periodically check if the disk
+	// have enough free space, and potentially pause the crawl if it doesn't
+	go c.handleCrawlPause()
 
 	// Set the crawl state to running
 	stats.SetCrawlState("running")

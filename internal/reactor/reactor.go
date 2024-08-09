@@ -72,6 +72,7 @@ func Init(config *Config) {
 		reactor.workersTx = config.WorkerRecvCh
 	}
 	if config.UseQueue && config.Queue != nil {
+		reactor.queue = config.Queue
 		reactor.useQueue = true
 	}
 	if config.UseHQ {
