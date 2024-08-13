@@ -10,6 +10,8 @@ jobs:
   release-linux-amd64:
     name: release linux/amd64
     runs-on: ubuntu-latest
+    env:
+      PROFILECLI_URL: ${{ secrets.PROFILECLI_URL }}
     steps:
     - uses: actions/checkout@v3
     - uses: wangyoucao577/go-release-action@af4a9db7b0ee3cf602cb75541d72bf568a99da4f #release/rel-v1.42
@@ -22,3 +24,5 @@ jobs:
         md5sum: FALSE
         sha256sum: TRUE
         asset_name: 'Zeno-linux-amd64'
+        pre_command: curl -fL https://github.com/grafana/pyroscope/releases/download/v1.1.5/profilecli_1.1.5_linux_amd64.tar.gz | tar xvz && chmod +x profilecli && ./profilecli query merge --query='{service_name="zeno"}' --profile-type="process_cpu:cpu:nanoseconds:cpu:nanoseconds" --from="now-6h" --to="now" --output=pprof=./default.pgo
+        build_flags: -pgo=./default.pgo
