@@ -2,17 +2,60 @@ package utils
 
 import (
 	"errors"
+	"fmt"
 	"log/slog"
 	"net"
 	"net/url"
+	"runtime"
 	"strings"
+	"unsafe"
 
 	"github.com/asaskevich/govalidator"
+	"github.com/internetarchive/Zeno/internal/pkg/log"
 	"golang.org/x/net/idna"
 )
 
 func URLToString(u *url.URL) string {
 	var err error
+
+	logger, created := log.DefaultOrStored()
+	if created {
+		panic("logger not initialized")
+	}
+	if u != nil {
+		// Get the size of the URL object
+		size := int(unsafe.Sizeof(*u))
+
+		// Add sizes of string fields
+		size += len(u.Scheme)
+		size += len(u.Opaque)
+		size += len(u.Host)
+		size += len(u.Path)
+		size += len(u.RawPath)
+		size += len(u.RawQuery)
+		size += len(u.Fragment)
+		size += len(u.RawFragment)
+
+		// Add size of User info if present
+		if u.User != nil {
+			username := u.User.Username()
+			size += len(username)
+			password, hasPassword := u.User.Password()
+			if hasPassword {
+				size += len(password)
+			}
+		}
+
+		// Get caller information
+		pc, file, line, ok := runtime.Caller(1)
+		caller := "unknown"
+		if ok {
+			fn := runtime.FuncForPC(pc)
+			caller = fmt.Sprintf("%s (%s:%d)", fn.Name(), file, line)
+		}
+
+		logger.Info("URL object size", "size", size, "url", u.String(), "caller", caller)
+	}
 
 	q := u.Query()
 	u.RawQuery = q.Encode()
