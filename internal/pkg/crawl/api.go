@@ -102,6 +102,36 @@ func setupPrometheus(crawl *Crawl) http.Handler {
 		Help:        "The total number of crawled URI",
 	})
 
+	crawl.PrometheusMetrics.AverageHQFeedRequestDuration = promauto.NewHistogram(prometheus.HistogramOpts{
+		Name:        crawl.PrometheusMetrics.Prefix + "hq_feed_request_duration_ms",
+		ConstLabels: labels,
+		Help:        "The average duration of a HQ feed request in milliseconds",
+	})
+
+	crawl.PrometheusMetrics.AverageHQDiscoveredRequestDuration = promauto.NewHistogram(prometheus.HistogramOpts{
+		Name:        crawl.PrometheusMetrics.Prefix + "hq_discovered_request_duration_ms",
+		ConstLabels: labels,
+		Help:        "The average duration of a HQ discovered request in milliseconds",
+	})
+
+	crawl.PrometheusMetrics.AverageHQSeencheckRequestDuration = promauto.NewHistogram(prometheus.HistogramOpts{
+		Name:        crawl.PrometheusMetrics.Prefix + "hq_seencheck_request_duration_ms",
+		ConstLabels: labels,
+		Help:        "The average duration of a HQ seencheck request in milliseconds",
+	})
+
+	crawl.PrometheusMetrics.AverageHQFinishedRequestDuration = promauto.NewHistogram(prometheus.HistogramOpts{
+		Name:        crawl.PrometheusMetrics.Prefix + "hq_finished_request_duration_ms",
+		ConstLabels: labels,
+		Help:        "The average duration of a HQ finished request in milliseconds",
+	})
+
+	crawl.PrometheusMetrics.AverageHQIdentifyRequestDuration = promauto.NewHistogram(prometheus.HistogramOpts{
+		Name:        crawl.PrometheusMetrics.Prefix + "hq_identify_request_duration_ms",
+		ConstLabels: labels,
+		Help:        "The average duration of a HQ identify request in milliseconds",
+	})
+
 	crawl.Log.Info("starting Prometheus export")
 
 	return promhttp.Handler()
