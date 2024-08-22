@@ -19,8 +19,13 @@ import (
 
 // PrometheusMetrics define all the metrics exposed by the Prometheus exporter
 type PrometheusMetrics struct {
-	Prefix        string
-	DownloadedURI prometheus.Counter
+	Prefix                             string
+	DownloadedURI                      prometheus.Counter
+	AverageHQFeedRequestDuration       prometheus.Histogram
+	AverageHQDiscoveredRequestDuration prometheus.Histogram
+	AverageHQSeencheckRequestDuration  prometheus.Histogram
+	AverageHQFinishedRequestDuration   prometheus.Histogram
+	AverageHQIdentifyRequestDuration   prometheus.Histogram
 }
 
 // Start fire up the crawling process

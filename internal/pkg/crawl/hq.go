@@ -29,6 +29,7 @@ func (c *Crawl) HQWebsocket() {
 
 	// send an "identify" message to the crawl HQ every second
 	for {
+		startTime := time.Now()
 		err := c.HQClient.Identify(&gocrawlhq.IdentifyMessage{
 			Project:   c.HQProject,
 			Job:       c.Job,
@@ -36,6 +37,7 @@ func (c *Crawl) HQWebsocket() {
 			Hostname:  utils.GetHostname(),
 			GoVersion: utils.GetVersion().GoVersion,
 		})
+		c.PrometheusMetrics.AverageHQIdentifyRequestDuration.Observe(float64(time.Since(startTime).Milliseconds()))
 		if err != nil {
 			c.Log.WithFields(c.genLogFields(err, nil, map[string]interface{}{})).Error("error sending identify payload to crawl HQ, trying to reconnect..")
 
@@ -70,7 +72,9 @@ func (c *Crawl) HQProducer() {
 				// is already closed, so no other goroutine can write to the slice
 				if len(discoveredArray) > 0 {
 					for {
+						startTime := time.Now()
 						_, err := c.HQClient.Discovered(discoveredArray, "seed", false, false)
+						c.PrometheusMetrics.AverageHQDiscoveredRequestDuration.Observe(float64(time.Since(startTime).Milliseconds()))
 						if err != nil {
 							c.Log.WithFields(c.genLogFields(err, nil, map[string]interface{}{})).Error("error sending payload to crawl HQ, waiting 1s then retrying..")
 							time.Sleep(time.Second)
@@ -85,7 +89,9 @@ func (c *Crawl) HQProducer() {
 				mutex.Lock()
 				if (len(discoveredArray) >= int(math.Ceil(float64(c.Workers.Count)/2)) || time.Since(HQLastSent) >= time.Second*10) && len(discoveredArray) > 0 {
 					for {
+						startTime := time.Now()
 						_, err := c.HQClient.Discovered(discoveredArray, "seed", false, false)
+						c.PrometheusMetrics.AverageHQDiscoveredRequestDuration.Observe(float64(time.Since(startTime).Milliseconds()))
 						if err != nil {
 							c.Log.WithFields(c.genLogFields(err, nil, map[string]interface{}{})).Error("error sending payload to crawl HQ, waiting 1s then retrying..")
 							time.Sleep(time.Second)
@@ -123,7 +129,9 @@ func (c *Crawl) HQProducer() {
 		// gob's encode/decode doesn't properly support booleans
 		if discoveredItem.BypassSeencheck {
 			for {
+				startTime := time.Now()
 				_, err := c.HQClient.Discovered([]gocrawlhq.URL{discoveredURL}, "seed", true, false)
+				c.PrometheusMetrics.AverageHQDiscoveredRequestDuration.Observe(float64(time.Since(startTime).Milliseconds()))
 				if err != nil {
 					c.Log.WithFields(c.genLogFields(err, nil, map[string]interface{}{
 						"bypassSeencheck": discoveredItem.BypassSeencheck,
@@ -151,7 +159,7 @@ func (c *Crawl) HQConsumer() {
 		// This is on purpose evaluated every time,
 		// because the value of workers will maybe change
 		// during the crawl in the future (to be implemented)
-		var HQBatchSize = int(math.Ceil(float64(c.Workers.Count)))
+		var HQBatchSize = c.Workers.Count
 
 		if c.Finished.Get() {
 			c.Log.Error("crawl finished, stopping HQ consumer")
@@ -171,7 +179,9 @@ func (c *Crawl) HQConsumer() {
 		}
 
 		// get batch from crawl HQ
-		batch, err := c.HQClient.Feed(HQBatchSize, c.HQStrategy)
+		startTime := time.Now()
+		batch, err := c.HQClient.Feed(int(HQBatchSize), c.HQStrategy)
+		c.PrometheusMetrics.AverageHQFeedRequestDuration.Observe(float64(time.Since(startTime).Milliseconds()))
 		if err != nil {
 			if strings.Contains(err.Error(), "feed is empty") {
 				time.Sleep(time.Second)
@@ -239,7 +249,9 @@ func (c *Crawl) HQFinisher() {
 
 		if len(finishedArray) == int(math.Ceil(float64(c.Workers.Count)/2)) {
 			for {
+				startTime := time.Now()
 				_, err := c.HQClient.Finished(finishedArray, locallyCrawledTotal)
+				c.PrometheusMetrics.AverageHQFinishedRequestDuration.Observe(float64(time.Since(startTime).Milliseconds()))
 				if err != nil {
 					c.Log.WithFields(c.genLogFields(err, nil, map[string]interface{}{
 						"finishedArray": finishedArray,
@@ -258,7 +270,9 @@ func (c *Crawl) HQFinisher() {
 	// send remaining finished URLs
 	if len(finishedArray) > 0 {
 		for {
+			startTime := time.Now()
 			_, err := c.HQClient.Finished(finishedArray, locallyCrawledTotal)
+			c.PrometheusMetrics.AverageHQFinishedRequestDuration.Observe(float64(time.Since(startTime).Milliseconds()))
 			if err != nil {
 				c.Log.WithFields(c.genLogFields(err, nil, map[string]interface{}{
 					"finishedArray": finishedArray,
@@ -282,7 +296,9 @@ func (c *Crawl) HQSeencheckURLs(URLs []*url.URL) (seencheckedBatch []*url.URL, e
 		})
 	}
 
+	startTime := time.Now()
 	discoveredResponse, err := c.HQClient.Discovered(discoveredURLs, "asset", false, true)
+	c.PrometheusMetrics.AverageHQSeencheckRequestDuration.Observe(float64(time.Since(startTime).Milliseconds()))
 	if err != nil {
 		c.Log.WithFields(c.genLogFields(err, nil, map[string]interface{}{
 			"batchLen": len(URLs),
@@ -314,7 +330,9 @@ func (c *Crawl) HQSeencheckURL(URL *url.URL) (bool, error) {
 		Value: utils.URLToString(URL),
 	}
 
+	startTime := time.Now()
 	discoveredResponse, err := c.HQClient.Discovered([]gocrawlhq.URL{discoveredURL}, "asset", false, true)
+	c.PrometheusMetrics.AverageHQSeencheckRequestDuration.Observe(float64(time.Since(startTime).Milliseconds()))
 	if err != nil {
 		c.Log.Error("error sending seencheck payload to crawl HQ", "err", err, "url", utils.URLToString(URL))
 		return false, err

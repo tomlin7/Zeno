@@ -82,7 +82,6 @@ type Crawl struct {
 	// API settings
 	API               bool
 	APIPort           string
-	Prometheus        bool
 	PrometheusMetrics *PrometheusMetrics
 
 	// Real time statistics
@@ -112,7 +111,7 @@ type Crawl struct {
 	HQKey                  string
 	HQSecret               string
 	HQStrategy             string
-	HQBatchSize            int
+	HQBatchSize            uint
 	HQContinuousPull       bool
 	HQClient               *gocrawlhq.Client
 	HQFinishedChannel      chan *queue.Item
@@ -276,15 +275,8 @@ func GenerateCrawlConfig(config *config.Config) (*Crawl, error) {
 
 	c.API = config.API
 	c.APIPort = config.APIPort
-
-	// If Prometheus is specified, then we make sure
-	// c.API is true
-	c.Prometheus = config.Prometheus
-	if c.Prometheus {
-		c.API = true
-		c.PrometheusMetrics = &PrometheusMetrics{}
-		c.PrometheusMetrics.Prefix = config.PrometheusPrefix
-	}
+	c.PrometheusMetrics = &PrometheusMetrics{}
+	c.PrometheusMetrics.Prefix = config.PrometheusPrefix
 
 	if config.UserAgent != "Zeno" {
 		c.UserAgent = config.UserAgent
@@ -314,7 +306,7 @@ func GenerateCrawlConfig(config *config.Config) (*Crawl, error) {
 	c.HQKey = config.HQKey
 	c.HQSecret = config.HQSecret
 	c.HQStrategy = config.HQStrategy
-	c.HQBatchSize = int(config.HQBatchSize)
+	c.HQBatchSize = uint(config.HQBatchSize)
 	c.HQContinuousPull = config.HQContinuousPull
 	c.HQRateLimitingSendBack = config.HQRateLimitSendBack
 

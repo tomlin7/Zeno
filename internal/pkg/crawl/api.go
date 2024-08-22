@@ -51,9 +51,7 @@ func (crawl *Crawl) startAPI() {
 		json.NewEncoder(w).Encode(response)
 	})
 
-	if crawl.Prometheus {
-		http.HandleFunc("/metrics", setupPrometheus(crawl).ServeHTTP)
-	}
+	http.HandleFunc("/metrics", setupPrometheus(crawl).ServeHTTP)
 
 	http.HandleFunc("/queue", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")

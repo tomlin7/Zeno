@@ -39,7 +39,6 @@ func getCMDsFlags(getCmd *cobra.Command) {
 	getCmd.PersistentFlags().Bool("debug", false, "")
 	getCmd.PersistentFlags().Bool("api", false, "Enable API")
 	getCmd.PersistentFlags().String("api-port", "9443", "Port to listen on for the API.")
-	getCmd.PersistentFlags().Bool("prometheus", false, "Export metrics in Prometheus format. (implies --api)")
 	getCmd.PersistentFlags().String("prometheus-prefix", "zeno:", "String used as a prefix for the exported Prometheus metrics.")
 	getCmd.PersistentFlags().Int("max-redirect", 20, "Specifies the maximum number of redirections to follow for a resource.")
 	getCmd.PersistentFlags().Int("max-retry", 5, "Number of retry if error happen when executing HTTP request.")

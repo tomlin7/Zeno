@@ -63,7 +63,6 @@ type Config struct {
 	Debug                          bool     `mapstructure:"debug"`
 	LiveStats                      bool     `mapstructure:"live-stats"`
 	API                            bool     `mapstructure:"api"`
-	Prometheus                     bool     `mapstructure:"prometheus"`
 	DomainsCrawl                   bool     `mapstructure:"domains-crawl"`
 	CaptureAlternatePages          bool     `mapstructure:"capture-alternate-pages"`
 	RandomLocalIP                  bool     `mapstructure:"random-local-ip"`
