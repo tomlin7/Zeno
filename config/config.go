@@ -77,6 +77,14 @@ type Config struct {
 	NoStdoutLogging                bool     `mapstructure:"no-stdout-log"`
 	NoHandover                     bool     `mapstructure:"no-handover"`
 	NoBatchWriteWAL                bool     `mapstructure:"ultrasafe-queue"`
+
+	// Upload settings
+	IAUpload      bool     `mapstructure:"ia-upload"`
+	IACollections []string `mapstructure:"ia-collection"`
+	IAMediatype   string   `mapstructure:"ia-mediatype"`
+	IAItemSize    int64    `mapstructure:"ia-item-size"`
+	IAAccessKey   string   `mapstructure:"ia-access-key"`
+	IASecretKey   string   `mapstructure:"ia-secret-key"`
 }
 
 var (

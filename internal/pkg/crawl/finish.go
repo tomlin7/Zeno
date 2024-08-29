@@ -68,6 +68,10 @@ func (crawl *Crawl) finish() {
 		crawl.Log.Warn("[SEENCHECK] Database closed")
 	}
 
+	if crawl.IAUpload {
+		crawl.IAUploadConfig.DoneChan <- true
+	}
+
 	crawl.Log.Warn("Finished!")
 
 	crawl.Log.Warn("Shutting down the logger, bai bai")

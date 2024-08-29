@@ -104,4 +104,12 @@ func getCMDsFlags(getCmd *cobra.Command) {
 	getCmd.PersistentFlags().Int("msr", 20, "Minimum space required in GB to continue the crawl.")
 	getCmd.PersistentFlags().MarkDeprecated("msr", "use --min-space-required instead")
 	getCmd.PersistentFlags().MarkHidden("msr")
+
+	// Upload flags
+	getCmd.PersistentFlags().Bool("ia-upload", false, "Enable Internet Archive upload.")
+	getCmd.PersistentFlags().StringSlice("ia-collection", []string{}, "Internet Archive collection to upload the WARC files to.")
+	getCmd.PersistentFlags().String("ia-mediatype", "web", "Internet Archive mediatype to upload the WARC files as.")
+	getCmd.PersistentFlags().Int("ia-item-size", 10, "Internet Archive item size to upload the WARC files as. (in GB)")
+	getCmd.PersistentFlags().String("ia-access-key", "", "Internet Archive access key to use for uploading.")
+	getCmd.PersistentFlags().String("ia-secret-key", "", "Internet Archive secret key to use for uploading.")
 }

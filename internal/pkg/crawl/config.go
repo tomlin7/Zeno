@@ -18,6 +18,7 @@ import (
 	"github.com/internetarchive/Zeno/internal/pkg/log"
 	"github.com/internetarchive/Zeno/internal/pkg/queue"
 	"github.com/internetarchive/Zeno/internal/pkg/seencheck"
+	"github.com/internetarchive/Zeno/internal/pkg/upload"
 	"github.com/internetarchive/Zeno/internal/pkg/utils"
 	"github.com/paulbellamy/ratecounter"
 )
@@ -119,6 +120,10 @@ type Crawl struct {
 	HQProducerChannel      chan *queue.Item
 	HQChannelsWg           *sync.WaitGroup
 	HQRateLimitingSendBack bool
+
+	// Upload settings
+	IAUpload       bool
+	IAUploadConfig *upload.Config
 }
 
 func GenerateCrawlConfig(config *config.Config) (*Crawl, error) {
@@ -192,6 +197,16 @@ func GenerateCrawlConfig(config *config.Config) (*Crawl, error) {
 	c.JobPath = path.Join("jobs", config.Job)
 
 	c.Workers = NewPool(uint(config.WorkersCount), time.Second*60, c)
+
+	if config.IAUpload {
+		c.IAUpload = true
+		c.IAUploadConfig = upload.NewConfig(path.Join(c.JobPath, "warcs"))
+		c.IAUploadConfig.IAAccessKey = config.IAAccessKey
+		c.IAUploadConfig.IASecretKey = config.IASecretKey
+		c.IAUploadConfig.IAItemSize = config.IAItemSize
+		c.IAUploadConfig.IACollections = config.IACollections
+		c.IAUploadConfig.IAMediatype = config.IAMediatype
+	}
 
 	if config.PyroscopeAddress != "" {
 		runtime.SetMutexProfileFraction(5)

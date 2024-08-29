@@ -141,6 +141,12 @@ func (c *Crawl) Start() (err error) {
 
 	c.Log.Info("WARC writer initialized")
 
+	if c.IAUpload {
+		c.Log.Info("Starting IA uploader..")
+		c.IAUploadConfig.Start()
+		c.Log.Info("IA uploader started")
+	}
+
 	// Process responsible for slowing or pausing the crawl
 	// when the WARC writing queue gets too big
 	go c.crawlSpeedLimiter()
