@@ -145,7 +145,9 @@ func (q *PersistentGroupedQueue) dequeueHandoverOnly() (*Item, error) {
 				done := <-q.handover.signalConsumerDone
 				if done {
 					q.HandoverOpen.Set(false)
-					break
+				}
+				if !q.handover.tryClose() {
+					q.logger.Fatal("Failed to close handover channel")
 				}
 			}
 			return nil, ErrQueueEmpty

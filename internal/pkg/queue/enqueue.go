@@ -491,7 +491,7 @@ func (q *PersistentGroupedQueue) batchEnqueueHandoverOnly(items ...*Item) error 
 
 	isHandover = q.handover.tryOpen(batchLen)
 	if !isHandover {
-		q.logger.Error("failed to open handover")
+		q.logger.Info("handover already opened, feeding into the existing handover")
 	}
 
 	if isHandover {
