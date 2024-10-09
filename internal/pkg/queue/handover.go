@@ -1,7 +1,6 @@
 package queue
 
 import (
-	"fmt"
 	"sync/atomic"
 	"time"
 )
@@ -102,33 +101,28 @@ func (h *handoverChannel) tryClose() bool {
 
 func (h *handoverChannel) tryPut(item *handoverEncodedItem) bool {
 	if !h.ready.Load() || !h.open.Load() {
-		fmt.Printf("Handover not ready or open\n")
 		return false
 	}
 	select {
 	case h.ch <- item:
 		return true
 	default:
-		fmt.Printf("Item wont fit in channel\n")
 		return false
 	}
 }
 
 func (h *handoverChannel) tryGet() (*handoverEncodedItem, bool) {
 	if !h.ready.Load() || !h.open.Load() {
-		fmt.Printf("Handover not ready or open\n")
 		return nil, false
 	}
 	select {
 	case item := <-h.ch:
 		if item == nil {
-			fmt.Printf("Get item nil\n")
 			return nil, true
 		}
 		h.activityTracker.record(1)
 		return item, true
 	default:
-		fmt.Printf("No item in channel\n")
 		return nil, false
 	}
 }
