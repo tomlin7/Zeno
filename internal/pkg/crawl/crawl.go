@@ -73,7 +73,15 @@ func (c *Crawl) Start() (err error) {
 
 	// Initialize the queue & seencheck
 	c.Log.Info("Initializing queue and seencheck..")
-	c.Queue, err = queue.NewPersistentGroupedQueue(path.Join(c.JobPath, "queue"), c.UseHandover, c.UseCommit)
+	var handoverType queue.HandoverType
+	if c.HandoverOnly {
+		handoverType = queue.HandoverOnly
+	} else if c.UseHandover {
+		handoverType = queue.UseHandover
+	} else {
+		handoverType = queue.NoHandover
+	}
+	c.Queue, err = queue.NewPersistentGroupedQueue(path.Join(c.JobPath, "queue"), handoverType, c.UseCommit)
 	if err != nil {
 		c.Log.Fatal("unable to init queue", "error", err)
 	}

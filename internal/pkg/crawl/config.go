@@ -36,6 +36,7 @@ type Crawl struct {
 	Seencheck    *seencheck.Seencheck
 	UseSeencheck bool
 	UseHandover  bool
+	HandoverOnly bool
 	UseCommit    bool
 
 	// Worker pool
@@ -322,6 +323,10 @@ func GenerateCrawlConfig(config *config.Config) (*Crawl, error) {
 
 	// Handover mechanism
 	c.UseHandover = config.Handover
+	if config.HandoverOnly {
+		c.HQContinuousPull = true
+		c.HandoverOnly = config.HandoverOnly
+	}
 
 	c.UseCommit = !config.NoBatchWriteWAL
 

@@ -464,3 +464,67 @@ func writeItemToFile(q *PersistentGroupedQueue, item *handoverEncodedItem, start
 	}
 	return commit, nil
 }
+
+func (q *PersistentGroupedQueue) batchEnqueueHandoverOnly(items ...*Item) error {
+	if !q.CanEnqueue() {
+		return ErrQueueClosed
+	}
+
+	batchLen := len(items)
+	if batchLen == 0 {
+		return fmt.Errorf("cannot enqueue empty batch")
+	}
+
+	var (
+		// Global
+		isHandover bool
+
+		// Handover
+		failedHandoverItems = []*handoverEncodedItem{}
+
+		// No Handover
+		itemsChan = make(chan *handoverEncodedItem, batchLen)
+	)
+
+	// Update empty status
+	defer q.Empty.Set(false)
+
+	isHandover = q.handover.tryOpen(batchLen)
+	if !isHandover {
+		q.logger.Error("failed to open handover")
+	}
+
+	if isHandover {
+		for i, item := range items {
+			if item == nil {
+				q.logger.Error("cannot enqueue nil item")
+				continue
+			}
+
+			b, err := encodeItem(item)
+			if err != nil {
+				q.logger.Error("failed to encode item", "err", err)
+				continue
+			}
+
+			encodedItem := &handoverEncodedItem{
+				bytes: b,
+				item:  item,
+			}
+			if !q.handover.tryPut(encodedItem) {
+				q.logger.Error("failed to put item in handover")
+				failedHandoverItems = append(failedHandoverItems, encodedItem)
+			}
+
+			if i == 0 {
+				q.HandoverOpen.Set(true)
+			}
+		}
+	}
+
+	// This close IS necessary to avoid indefinitely waiting in the next loop
+	// It's also necessary to close the channel if handover was used
+	close(itemsChan)
+
+	return nil
+}

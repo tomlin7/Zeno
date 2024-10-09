@@ -54,6 +54,7 @@ func getHQCmdFlags(getHQCmd *cobra.Command) {
 	getHQCmd.PersistentFlags().Bool("hq-continuous-pull", false, "If turned on, the crawler will pull URLs from Crawl HQ continuously.")
 	getHQCmd.PersistentFlags().String("hq-strategy", "lifo", "Crawl HQ feeding strategy.")
 	getHQCmd.PersistentFlags().Bool("hq-rate-limiting-send-back", false, "If turned on, the crawler will send back URLs that hit a rate limit to crawl HQ.")
+	getHQCmd.PersistentFlags().Bool("handover-only", false, "If turned on, the crawler will only handover URLs to workers, bypassing the disk queue.")
 
 	getHQCmd.MarkPersistentFlagRequired("hq-address")
 	getHQCmd.MarkPersistentFlagRequired("hq-key")

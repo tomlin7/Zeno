@@ -74,6 +74,7 @@ type Config struct {
 	NoStdoutLogging                bool     `mapstructure:"no-stdout-log"`
 	NoBatchWriteWAL                bool     `mapstructure:"ultrasafe-queue"`
 	Handover                       bool     `mapstructure:"handover"`
+	HandoverOnly                   bool     `mapstructure:"handover-only"`
 
 	// Network
 	Proxy              string   `mapstructure:"proxy"`

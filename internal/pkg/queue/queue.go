@@ -15,6 +15,14 @@ import (
 	"github.com/internetarchive/Zeno/internal/pkg/utils"
 )
 
+type HandoverType int
+
+const (
+	NoHandover HandoverType = iota
+	UseHandover
+	HandoverOnly
+)
+
 type PersistentGroupedQueue struct {
 	Paused    *utils.TAtomBool
 	Empty     *utils.TAtomBool
@@ -58,7 +66,7 @@ type Item struct {
 	Redirect        uint64
 }
 
-func NewPersistentGroupedQueue(queueDirPath string, useHandover bool, useCommit bool) (*PersistentGroupedQueue, error) {
+func NewPersistentGroupedQueue(queueDirPath string, useHandover HandoverType, useCommit bool) (*PersistentGroupedQueue, error) {
 	err := os.MkdirAll(queueDirPath, 0755)
 	if err != nil {
 		return nil, err
@@ -117,15 +125,19 @@ func NewPersistentGroupedQueue(queueDirPath string, useHandover bool, useCommit 
 	q.currentHost.Store(0)
 
 	// Handover
-	q.useHandover.Store(useHandover)
-	q.HandoverOpen.Set(false)
-	q.handoverCount.Store(0)
-	if useHandover {
+	if useHandover > NoHandover {
+		q.useHandover.Store(true)
+		q.HandoverOpen.Set(false)
+		q.handoverCount.Store(0)
 		q.handover = newHandoverChannel()
 	}
 
 	// Commit
-	if useCommit {
+	if useHandover == HandoverOnly {
+		q.enqueueOp = q.enqueueHandoverOnly
+		q.batchEnqueueOp = q.batchEnqueueHandoverOnly
+		q.dequeueOp = q.dequeueHandoverOnly
+	} else if useCommit {
 		q.enqueueOp = q.enqueueUntilCommitted
 		q.batchEnqueueOp = q.batchEnqueueUntilCommitted
 		q.dequeueOp = q.dequeueCommitted

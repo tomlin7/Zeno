@@ -131,6 +131,30 @@ func (q *PersistentGroupedQueue) dequeueCommitted() (*Item, error) {
 	return item, nil
 }
 
+func (q *PersistentGroupedQueue) dequeueHandoverOnly() (*Item, error) {
+	if !q.CanDequeue() {
+		return nil, ErrDequeueClosed
+	}
+
+	if q.HandoverOpen.Get() {
+		if item, ok := q.handover.tryGet(); ok && item != nil {
+			q.handoverCount.Add(1)
+			return item.item, nil
+		} else if !ok {
+			for q.useHandover.Load() {
+				done := <-q.handover.signalConsumerDone
+				if done {
+					q.HandoverOpen.Set(false)
+					break
+				}
+			}
+			return nil, ErrQueueEmpty
+		}
+	}
+
+	return nil, ErrQueueEmpty
+}
+
 // getNextHost returns the next host to dequeue from
 func (q *PersistentGroupedQueue) getNextHost() (string, error) {
 	if q.Empty.Get() && q.CanDequeue() {
