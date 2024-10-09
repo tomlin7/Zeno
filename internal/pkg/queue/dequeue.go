@@ -19,7 +19,7 @@ func (q *PersistentGroupedQueue) dequeueNoCommit() (*Item, error) {
 
 	if q.HandoverOpen.Get() {
 		if item, ok := q.handover.tryGet(); ok && item != nil {
-			q.handoverCount.Add(1)
+			q.handoverGetCount.Add(1)
 			return item.item, nil
 		}
 	}
@@ -77,7 +77,7 @@ func (q *PersistentGroupedQueue) dequeueCommitted() (*Item, error) {
 
 	if q.HandoverOpen.Get() {
 		if item, ok := q.handover.tryGet(); ok && item != nil {
-			q.handoverCount.Add(1)
+			q.handoverGetCount.Add(1)
 			return item.item, nil
 		}
 	}
@@ -138,7 +138,7 @@ func (q *PersistentGroupedQueue) dequeueHandoverOnly() (*Item, error) {
 
 	if q.HandoverOpen.Get() {
 		if item, ok := q.handover.tryGet(); ok && item != nil {
-			q.handoverCount.Add(1)
+			q.handoverGetCount.Add(1)
 			return item.item, nil
 		} else if !ok {
 			q.logger.Warn("Signal closing handover")

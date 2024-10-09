@@ -40,11 +40,12 @@ type PersistentGroupedQueue struct {
 	currentHost     *atomic.Uint64
 	mutex           sync.RWMutex
 
-	useHandover   *atomic.Bool
-	handover      *handoverChannel
-	HandoverOpen  *utils.TAtomBool
-	handoverMutex sync.Mutex
-	handoverCount *atomic.Uint64
+	useHandover      *atomic.Bool
+	handover         *handoverChannel
+	HandoverOpen     *utils.TAtomBool
+	handoverMutex    sync.Mutex
+	handoverPutCount *atomic.Uint64
+	handoverGetCount *atomic.Uint64
 
 	useCommit      bool
 	enqueueOp      func(*Item) error
@@ -94,9 +95,10 @@ func NewPersistentGroupedQueue(queueDirPath string, useHandover HandoverType, us
 		closed:    new(utils.TAtomBool),
 		finishing: new(utils.TAtomBool),
 
-		useHandover:   new(atomic.Bool),
-		HandoverOpen:  new(utils.TAtomBool),
-		handoverCount: new(atomic.Uint64),
+		useHandover:      new(atomic.Bool),
+		HandoverOpen:     new(utils.TAtomBool),
+		handoverGetCount: new(atomic.Uint64),
+		handoverPutCount: new(atomic.Uint64),
 
 		useCommit: useCommit,
 
@@ -128,7 +130,8 @@ func NewPersistentGroupedQueue(queueDirPath string, useHandover HandoverType, us
 	if useHandover > NoHandover {
 		q.useHandover.Store(true)
 		q.HandoverOpen.Set(false)
-		q.handoverCount.Store(0)
+		q.handoverGetCount.Store(0)
+		q.handoverPutCount.Store(0)
 		q.handover = newHandoverChannel()
 	}
 
