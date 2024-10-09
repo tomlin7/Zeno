@@ -165,7 +165,7 @@ func (c *Crawl) HQConsumer() {
 		// otherwise we will only pull URLs when needed (and when the crawl is not paused)
 		for (c.Queue.GetStats().TotalElements > HQBatchSize && !c.HQContinuousPull) || c.Paused.Get() || c.Queue.HandoverOpen.Get() {
 			c.HQConsumerState = "waiting"
-			c.Log.Info("HQ producer waiting", "paused", c.Paused.Get(), "handoverOpen", c.Queue.HandoverOpen.Get(), "queueSize", c.Queue.GetStats().TotalElements)
+			c.Log.Info("HQ producer waiting", "paused", c.Paused.Get(), "handoverOpen", c.Queue.HandoverOpen.Get(), "queueSize", c.Queue.GetStats().TotalElements, "HQContinuousPull", c.HQContinuousPull)
 			time.Sleep(time.Millisecond * 50)
 			continue
 		}

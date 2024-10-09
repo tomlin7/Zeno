@@ -141,6 +141,7 @@ func (q *PersistentGroupedQueue) dequeueHandoverOnly() (*Item, error) {
 			q.handoverCount.Add(1)
 			return item.item, nil
 		} else if !ok {
+			q.logger.Warn("Signal closing handover")
 			q.HandoverOpen.Set(false)
 
 			return nil, ErrQueueEmpty
