@@ -324,6 +324,7 @@ func GenerateCrawlConfig(config *config.Config) (*Crawl, error) {
 	// Handover mechanism
 	c.UseHandover = config.Handover
 	if config.HandoverOnly {
+		c.UseHandover = true
 		c.HQContinuousPull = true
 		c.HandoverOnly = config.HandoverOnly
 	}
