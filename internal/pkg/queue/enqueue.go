@@ -490,7 +490,6 @@ func (q *PersistentGroupedQueue) batchEnqueueHandoverOnly(items ...*Item) error 
 	defer q.Empty.Set(false)
 
 	isHandover = q.handover.tryOpen(batchLen)
-	q.HandoverOpen.Set(true)
 	if !isHandover {
 		q.logger.Info("handover already opened, feeding into the existing handover", "size", batchLen)
 	}
@@ -516,6 +515,8 @@ func (q *PersistentGroupedQueue) batchEnqueueHandoverOnly(items ...*Item) error 
 			failedHandoverItems = append(failedHandoverItems, encodedItem)
 		}
 	}
+
+	q.HandoverOpen.Set(true)
 
 	// This close IS necessary to avoid indefinitely waiting in the next loop
 	// It's also necessary to close the channel if handover was used
