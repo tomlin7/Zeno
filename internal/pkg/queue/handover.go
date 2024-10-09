@@ -1,6 +1,7 @@
 package queue
 
 import (
+	"fmt"
 	"sync/atomic"
 	"time"
 )
@@ -101,12 +102,14 @@ func (h *handoverChannel) tryClose() bool {
 
 func (h *handoverChannel) tryPut(item *handoverEncodedItem) bool {
 	if !h.ready.Load() || !h.open.Load() {
+		fmt.Printf("Handover not ready or open\n")
 		return false
 	}
 	select {
 	case h.ch <- item:
 		return true
 	default:
+		fmt.Printf("Item wont fit in channel\n")
 		return false
 	}
 }
