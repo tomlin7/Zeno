@@ -513,8 +513,9 @@ func (q *PersistentGroupedQueue) batchEnqueueHandoverOnly(items ...*Item) error 
 		if !q.handover.tryPut(encodedItem) {
 			q.logger.Error("failed to put item in handover")
 			failedHandoverItems = append(failedHandoverItems, encodedItem)
+		} else {
+			q.handoverPutCount.Add(1)
 		}
-		q.handoverPutCount.Add(1)
 	}
 
 	q.HandoverOpen.Set(true)
