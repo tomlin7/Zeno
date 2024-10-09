@@ -167,7 +167,6 @@ func (c *Crawl) HQConsumer() {
 			c.HQConsumerState = "waiting"
 			c.Log.Info("HQ producer waiting", "paused", c.Paused.Get(), "handoverOpen", c.Queue.HandoverOpen.Get(), "queueSize", c.Queue.GetStats().TotalElements, "HQContinuousPull", c.HQContinuousPull)
 			time.Sleep(time.Millisecond * 50)
-			continue
 		}
 
 		// If a specific HQ batch size is set, use it
