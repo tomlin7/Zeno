@@ -490,12 +490,13 @@ func (q *PersistentGroupedQueue) batchEnqueueHandoverOnly(items ...*Item) error 
 	defer q.Empty.Set(false)
 
 	isHandover = q.handover.tryOpen(batchLen)
+	q.HandoverOpen.Set(true)
 	if !isHandover {
 		q.logger.Info("handover already opened, feeding into the existing handover")
 	}
 
 	if isHandover {
-		for i, item := range items {
+		for _, item := range items {
 			if item == nil {
 				q.logger.Error("cannot enqueue nil item")
 				continue
@@ -514,10 +515,6 @@ func (q *PersistentGroupedQueue) batchEnqueueHandoverOnly(items ...*Item) error 
 			if !q.handover.tryPut(encodedItem) {
 				q.logger.Error("failed to put item in handover")
 				failedHandoverItems = append(failedHandoverItems, encodedItem)
-			}
-
-			if i == 0 {
-				q.HandoverOpen.Set(true)
 			}
 		}
 	}
