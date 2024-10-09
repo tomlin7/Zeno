@@ -54,7 +54,7 @@ func (c *Crawl) executeGET(item *queue.Item, req *http.Request, isRedirection bo
 	}
 
 	// Retry on 429 error
-	for retry := uint8(0); retry < c.MaxRetry; retry++ {
+	for retry := uint8(0); retry <= c.MaxRetry; retry++ {
 		// Execute GET request
 		if c.ClientProxied == nil || utils.StringContainsSliceElements(req.URL.Host, c.BypassProxy) {
 			resp, err = c.Client.Do(req)
