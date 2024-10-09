@@ -166,8 +166,9 @@ func (c *Crawl) HQConsumer() {
 		for (c.Queue.GetStats().TotalElements > HQBatchSize && !c.HQContinuousPull) || c.Paused.Get() || c.Queue.HandoverOpen.Get() {
 			c.HQConsumerState = "waiting"
 			c.Log.Info("HQ producer waiting", "paused", c.Paused.Get(), "handoverOpen", c.Queue.HandoverOpen.Get(), "queueSize", c.Queue.GetStats().TotalElements, "HQContinuousPull", c.HQContinuousPull)
-			time.Sleep(time.Millisecond * 50)
+			time.Sleep(time.Millisecond * 500)
 		}
+		c.Log.Info("HQ producer running", "paused", c.Paused.Get(), "handoverOpen", c.Queue.HandoverOpen.Get(), "queueSize", c.Queue.GetStats().TotalElements, "HQContinuousPull", c.HQContinuousPull)
 
 		// If a specific HQ batch size is set, use it
 		if c.HQBatchSize != 0 {
