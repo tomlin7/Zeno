@@ -495,27 +495,25 @@ func (q *PersistentGroupedQueue) batchEnqueueHandoverOnly(items ...*Item) error 
 		q.logger.Info("handover already opened, feeding into the existing handover", "size", batchLen)
 	}
 
-	if isHandover {
-		for _, item := range items {
-			if item == nil {
-				q.logger.Error("cannot enqueue nil item")
-				continue
-			}
+	for _, item := range items {
+		if item == nil {
+			q.logger.Error("cannot enqueue nil item")
+			continue
+		}
 
-			b, err := encodeItem(item)
-			if err != nil {
-				q.logger.Error("failed to encode item", "err", err)
-				continue
-			}
+		b, err := encodeItem(item)
+		if err != nil {
+			q.logger.Error("failed to encode item", "err", err)
+			continue
+		}
 
-			encodedItem := &handoverEncodedItem{
-				bytes: b,
-				item:  item,
-			}
-			if !q.handover.tryPut(encodedItem) {
-				q.logger.Error("failed to put item in handover")
-				failedHandoverItems = append(failedHandoverItems, encodedItem)
-			}
+		encodedItem := &handoverEncodedItem{
+			bytes: b,
+			item:  item,
+		}
+		if !q.handover.tryPut(encodedItem) {
+			q.logger.Error("failed to put item in handover")
+			failedHandoverItems = append(failedHandoverItems, encodedItem)
 		}
 	}
 
