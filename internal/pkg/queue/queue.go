@@ -134,7 +134,6 @@ func NewPersistentGroupedQueue(queueDirPath string, useHandover HandoverType, us
 
 	// Commit
 	if useHandover == HandoverOnly {
-		q.enqueueOp = q.enqueueHandoverOnly
 		q.batchEnqueueOp = q.batchEnqueueHandoverOnly
 		q.dequeueOp = q.dequeueHandoverOnly
 	} else if useCommit {
