@@ -8,7 +8,6 @@ import (
 	"sync"
 	"time"
 
-	"git.archive.org/wb/gocrawlhq"
 	"github.com/CorentinB/warc"
 	"github.com/google/uuid"
 	"github.com/internetarchive/Zeno/config"
@@ -116,7 +115,6 @@ type Crawl struct {
 	HQStrategy             string
 	HQBatchSize            int
 	HQContinuousPull       bool
-	HQClient               *gocrawlhq.Client
 	HQConsumerState        string
 	HQFinishedChannel      chan *queue.Item
 	HQProducerChannel      chan *queue.Item

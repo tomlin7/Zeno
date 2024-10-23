@@ -9,7 +9,6 @@ import (
 	"sync"
 	"time"
 
-	"git.archive.org/wb/gocrawlhq"
 	"github.com/CorentinB/warc"
 	"github.com/internetarchive/Zeno/internal/pkg/crawl/dependencies/ytdlp"
 	"github.com/internetarchive/Zeno/internal/pkg/queue"
@@ -189,19 +188,19 @@ func (c *Crawl) Start() (err error) {
 	// If crawl HQ parameters are specified, then we start the background
 	// processes responsible for pulling and pushing seeds from and to HQ
 	if c.UseHQ {
-		c.HQClient, err = gocrawlhq.Init(c.HQKey, c.HQSecret, c.HQProject, c.HQAddress, "")
-		if err != nil {
-			c.Log.Fatal("unable to init crawl HQ client", "error", err)
-		}
+		// c.HQClient, err = gocrawlhq.Init(c.HQKey, c.HQSecret, c.HQProject, c.HQAddress, "")
+		// if err != nil {
+		// 	c.Log.Fatal("unable to init crawl HQ client", "error", err)
+		// }
 
 		c.HQProducerChannel = make(chan *queue.Item, c.Workers.Count)
 		c.HQFinishedChannel = make(chan *queue.Item, c.Workers.Count)
 
 		c.HQChannelsWg.Add(2)
-		go c.HQConsumer()
-		go c.HQProducer()
-		go c.HQFinisher()
-		go c.HQWebsocket()
+		// go c.HQConsumer()
+		// go c.HQProducer()
+		// go c.HQFinisher()
+		// go c.HQWebsocket()
 	} else if len(c.SeedList) > 0 {
 		// Temporarily disable handover as it's not needed
 		enableBackHandover := make(chan struct{})

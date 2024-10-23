@@ -139,19 +139,19 @@ func (c *Crawl) captureAssets(item *queue.Item, assets []*url.URL, cookies []*ht
 func (c *Crawl) seencheckAssets(assets []*url.URL, item *queue.Item) []*url.URL {
 	if c.UseSeencheck {
 		if c.UseHQ {
-			seencheckedURLs, err := c.HQSeencheckURLs(assets)
+			// seencheckedURLs, err := c.HQSeencheckURLs(assets)
 			// We ignore the error here because we don't want to slow down the crawl
 			// if HQ is down or if the request failed. So if we get an error, we just
 			// continue with the original list of assets.
-			if err != nil {
-				c.Log.WithFields(c.genLogFields(err, nil, map[string]interface{}{
-					"urls":      assets,
-					"parentHop": item.Hop,
-					"parentUrl": utils.URLToString(item.URL),
-				})).Error("error while seenchecking assets via HQ")
-			} else {
-				assets = seencheckedURLs
-			}
+			// if err != nil {
+			// 	c.Log.WithFields(c.genLogFields(err, nil, map[string]interface{}{
+			// 		"urls":      assets,
+			// 		"parentHop": item.Hop,
+			// 		"parentUrl": utils.URLToString(item.URL),
+			// 	})).Error("error while seenchecking assets via HQ")
+			// } else {
+			// 	assets = seencheckedURLs
+			// }
 
 			if len(assets) == 0 {
 				return []*url.URL{}

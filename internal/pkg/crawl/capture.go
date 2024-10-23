@@ -140,14 +140,14 @@ func (c *Crawl) executeGET(item *queue.Item, req *http.Request, isRedirection bo
 		// Seencheck the URL
 		if c.UseSeencheck {
 			if c.UseHQ {
-				isNewURL, err := c.HQSeencheckURL(URL)
-				if err != nil {
-					return resp, err
-				}
+				// isNewURL, err := c.HQSeencheckURL(URL)
+				// if err != nil {
+				// 	return resp, err
+				// }
 
-				if !isNewURL {
-					return nil, errors.New("URL from redirection has already been seen")
-				}
+				// if !isNewURL {
+				// 	return nil, errors.New("URL from redirection has already been seen")
+				// }
 			} else {
 				found := c.Seencheck.SeencheckURL(utils.URLToString(URL), "seed")
 				if found {
@@ -493,12 +493,12 @@ func (c *Crawl) Capture(item *queue.Item) error {
 		// to the seencheck table.
 		if c.UseSeencheck {
 			if c.UseHQ {
-				_, err := c.HQSeencheckURLs(utils.StringSliceToURLSlice(cfstreamURLs))
-				if err != nil {
-					c.Log.WithFields(c.genLogFields(err, item.URL, map[string]interface{}{
-						"urls": cfstreamURLs,
-					})).Error("error while seenchecking assets via HQ")
-				}
+				// _, err := c.HQSeencheckURLs(utils.StringSliceToURLSlice(cfstreamURLs))
+				// if err != nil {
+				// 	c.Log.WithFields(c.genLogFields(err, item.URL, map[string]interface{}{
+				// 		"urls": cfstreamURLs,
+				// 	})).Error("error while seenchecking assets via HQ")
+				// }
 			} else {
 				for _, cfstreamURL := range cfstreamURLs {
 					c.Seencheck.SeencheckURL(cfstreamURL, "asset")
