@@ -28,6 +28,14 @@ Authors:
 		}
 
 		cfg = config.GetConfig()
+
+		// P2825
+		logLevel, err := cmd.Flags().GetString("log-level")
+		if err != nil {
+			return fmt.Errorf("error getting log-level flag: %s", err)
+		}
+		cfg.LogLevel = logLevel
+
 		return nil
 	},
 	Run: func(cmd *cobra.Command, args []string) {

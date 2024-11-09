@@ -126,6 +126,9 @@ type Crawl struct {
 	// Dependencies
 	NoYTDLP   bool
 	YTDLPPath string
+
+	// Log level
+	LogLevel slog.Level
 }
 
 func GenerateCrawlConfig(config *config.Config) (*Crawl, error) {
@@ -157,7 +160,7 @@ func GenerateCrawlConfig(config *config.Config) (*Crawl, error) {
 		},
 		FileLevel:                fileLogLevel,
 		StdoutEnabled:            !config.NoStdoutLogging,
-		StdoutLevel:              slog.LevelInfo,
+		StdoutLevel:              c.LogLevel,
 		RotateLogFile:            true,
 		RotateElasticSearchIndex: true,
 		ElasticsearchConfig: &log.ElasticsearchConfig{
@@ -326,6 +329,20 @@ func GenerateCrawlConfig(config *config.Config) (*Crawl, error) {
 	c.UseHandover = config.Handover
 
 	c.UseCommit = !config.NoBatchWriteWAL
+
+	// Set log level
+	switch config.LogLevel {
+	case "debug":
+		c.LogLevel = slog.LevelDebug
+	case "info":
+		c.LogLevel = slog.LevelInfo
+	case "warn":
+		c.LogLevel = slog.LevelWarn
+	case "error":
+		c.LogLevel = slog.LevelError
+	default:
+		c.LogLevel = slog.LevelInfo
+	}
 
 	return c, nil
 }
